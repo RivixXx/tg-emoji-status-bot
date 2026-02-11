@@ -1,19 +1,20 @@
-from telethon import TelegramClient, functions, types
-from telethon.sessions import StringSession
-from flask import Flask, request
-import asyncio
 import os
+import asyncio
+from quart import Quart, request, jsonify
+from telethon import TelegramClient
+from telethon.sessions import StringSession
+from telethon import functions, types
 
-app = Flask(__name__)
+app = Quart(__name__)
 
-# Эти значения возьмём из переменных окружения Railway
+# Переменные из Railway
 api_id = int(os.environ['API_ID'])
 api_hash = os.environ['API_HASH']
 session_string = os.environ['SESSION_STRING']
 
+# Один клиент на весь процесс
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
-# Emoji для разных состояний (можно потом поменять)
 emoji_map = {
     'morning': '☕',
     'day': '☀️',
@@ -26,38 +27,47 @@ emoji_map = {
 
 emoji_cache = {}
 
-async def get_document_id(emoji):
-    if emoji in emoji_cache:
-        return emoji_cache[emoji]
-    result = await client(functions.messages.SearchCustomEmojiRequest(emojitext=emoji, hash=0))
+async def get_document_id(emoji_unicode: str) -> int:
+    if emoji_unicode in emoji_cache:
+        return emoji_cache[emoji_unicode]
+    result = await client(functions.messages.SearchCustomEmojiRequest(emojitext=emoji_unicode, hash=0))
     if result.documents:
         doc_id = result.documents[0].id
-        emoji_cache[emoji] = doc_id
+        emoji_cache[emoji_unicode] = doc_id
         return doc_id
-    raise ValueError(f"Emoji {emoji} не найден")
+    raise ValueError(f"Не найден custom emoji для {emoji_unicode}")
 
-async def set_status(state):
-    emoji = emoji_map.get(state)
-    if not emoji:
-        return
+async def update_status(state: str):
+    if state not in emoji_map:
+        raise ValueError(f"Неизвестное состояние: {state}")
+    emoji = emoji_map[state]
     doc_id = await get_document_id(emoji)
     await client(functions.account.UpdateEmojiStatusRequest(
         emoji_status=types.EmojiStatus(document_id=doc_id)
     ))
 
+@app.before_serving
+async def startup():
+    await client.start()
+    print("Telethon клиент запущен и авторизован")
+
+@app.after_serving
+async def shutdown():
+    await client.disconnect()
+    print("Telethon отключён")
+
 @app.route('/update', methods=['POST'])
-def update():
-    data = request.get_json()
+async def handle_update():
+    data = await request.get_json()
     state = data.get('state')
     if not state:
-        return {'error': 'Нет state'}, 400
+        return jsonify({'error': 'Требуется поле "state"'}), 400
     try:
-        asyncio.run(set_status(state))
-        return {'ok': True}
+        await update_status(state)
+        return jsonify({'status': 'updated'})
     except Exception as e:
-        return {'error': str(e)}, 500
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    asyncio.run(client.start())
-    port = int(os.environ.get('PORT', 8080))
+    port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
