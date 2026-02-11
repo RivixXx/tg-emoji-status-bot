@@ -18,12 +18,12 @@ client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
 emoji_map = {
     'morning': 5395463497783983254,
-    'day': '👨‍💼',
-    'evening': '👨‍💻',
-    'night': '💤',
-    'breakfast': '🫠',
-    'transit': '👣',
-    'weekend': '🏖️'
+    'day': 5362079447136610876,
+    'evening': 5375447270852407733,
+    'night': 5247100325059370738,
+    'breakfast': 5913264639025615311,
+    'transit': 5246743378917334735,
+    'weekend': 4906978012303458988
     # 'morning': '☕️',
     # 'day': '👨‍💼',
     # 'evening': '👨‍💻',
