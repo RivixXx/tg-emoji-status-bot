@@ -29,7 +29,7 @@ emoji_cache = {}
 async def get_document_id(emoji_unicode: str) -> int:
     if emoji_unicode in emoji_cache:
         return emoji_cache[emoji_unicode]
-    result = await client(functions.messages.SearchCustomEmojiRequest(emojitext=emoji_unicode, hash=0))
+    result = await client(functions.messages.SearchCustomEmojiRequest(emoticon=emoji_unicode, hash=0))
     if result.documents:
         doc_id = result.documents[0].id
         emoji_cache[emoji_unicode] = doc_id
