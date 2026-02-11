@@ -17,13 +17,20 @@ session_string = os.environ['SESSION_STRING']
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
 emoji_map = {
-    'morning': '☕️',
+    'morning': 5395463497783983254,
     'day': '👨‍💼',
     'evening': '👨‍💻',
     'night': '💤',
     'breakfast': '🫠',
     'transit': '👣',
     'weekend': '🏖️'
+    # 'morning': '☕️',
+    # 'day': '👨‍💼',
+    # 'evening': '👨‍💻',
+    # 'night': '💤',
+    # 'breakfast': '🫠',
+    # 'transit': '👣',
+    # 'weekend': '🏖️'
 }
 
 emoji_cache = {}
