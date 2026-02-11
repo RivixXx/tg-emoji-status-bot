@@ -29,12 +29,18 @@ emoji_cache = {}
 async def get_document_id(emoji_unicode: str) -> int:
     if emoji_unicode in emoji_cache:
         return emoji_cache[emoji_unicode]
-    result = await client(functions.messages.SearchCustomEmojiRequest(emoticon=emoji_unicode, hash=0))
-    if result.documents:
-        doc_id = result.documents[0].id
+    
+    result = await client(functions.messages.SearchCustomEmojiRequest(
+        emoticon=emoji_unicode,
+        hash=0
+    ))
+    
+    if result.document_id:
+        doc_id = result.document_id[0]
         emoji_cache[emoji_unicode] = doc_id
         return doc_id
-    raise ValueError(f"Не найден emoji: {emoji_unicode}")
+    else:
+        raise ValueError(f"Custom emoji не найден для '{emoji_unicode}'. Возможно, эмодзи не поддерживается или требуется Premium.")
 
 async def update_status(state: str):
     if state not in emoji_map:
