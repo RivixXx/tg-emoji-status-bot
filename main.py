@@ -3,7 +3,7 @@ import asyncio
 from quart import Quart
 from telethon import TelegramClient, functions, types
 from telethon.sessions import StringSession
-from datetime import datetime
+from datetime import datetime, timezone
 
 app = Quart(__name__)
 
@@ -38,7 +38,7 @@ async def update_status(state: str):
 
 async def periodic_update():
     while True:
-        now = datetime.utcnow()               # время сервера (UTC)
+        now = datetime.now(timezone.utc)               # время сервера (UTC)
         hour = now.hour
         minute = now.minute
         weekday = now.weekday()               # 0 = понедельник, 6 = воскресенье
