@@ -54,8 +54,9 @@ async def get_document_id(emoji_unicode: str) -> int:
 async def update_status(state: str):
     if state not in emoji_map:
         raise ValueError(f"Неизвестное состояние: {state}")
-    emoji = emoji_map[state]
-    doc_id = await get_document_id(emoji)
+    
+    doc_id = emoji_map[state]
+    
     await client(functions.account.UpdateEmojiStatusRequest(
         emoji_status=types.EmojiStatus(document_id=doc_id)
     ))
