@@ -7,16 +7,15 @@ from telethon import functions, types
 
 app = Quart(__name__)
 
-# Переменные из Railway
+# Переменные окружения
 api_id = int(os.environ['API_ID'])
 api_hash = os.environ['API_HASH']
 session_string = os.environ['SESSION_STRING']
 
-# Один клиент на весь процесс
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
 emoji_map = {
-    'morning': '☕',
+    'morning': '🌅',
     'day': '☀️',
     'evening': '🌆',
     'night': '🌙',
@@ -35,7 +34,7 @@ async def get_document_id(emoji_unicode: str) -> int:
         doc_id = result.documents[0].id
         emoji_cache[emoji_unicode] = doc_id
         return doc_id
-    raise ValueError(f"Не найден custom emoji для {emoji_unicode}")
+    raise ValueError(f"Не найден emoji: {emoji_unicode}")
 
 async def update_status(state: str):
     if state not in emoji_map:
@@ -48,8 +47,11 @@ async def update_status(state: str):
 
 @app.before_serving
 async def startup():
-    await client.start()
-    print("Telethon клиент запущен и авторизован")
+    # Запускаем клиент без asyncio.run()
+    await client.connect()
+    if not await client.is_user_authorized():
+        raise RuntimeError("Сессия не авторизована! Проверь SESSION_STRING")
+    print("Telethon клиент подключён и авторизован")
 
 @app.after_serving
 async def shutdown():
@@ -69,5 +71,5 @@ async def handle_update():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
