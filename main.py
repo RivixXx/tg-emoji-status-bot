@@ -1,7 +1,7 @@
 import os
 import asyncio
 from quart import Quart
-from telethon import TelegramClient, functions, types
+from telethon import TelegramClient, functions, types, events
 from telethon.sessions import StringSession
 from datetime import datetime, timezone, timedelta
 
@@ -11,19 +11,35 @@ app = Quart(__name__)
 api_id = int(os.environ['API_ID'])
 api_hash = os.environ['API_HASH']
 session_string = os.environ['SESSION_STRING']
+target_user_id = int(os.environ.get('TARGET_USER_ID', 0))
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
+# Кеш сообщений для лога удалений {msg_id: text}
+message_cache = {}
+
 # Твои document_id (оставил как есть)
-emoji_map = {
-    'morning': 5395463497783983254,
-    'day': 5362079447136610876,
-    'evening': 5375447270852407733,
-    'night': 5247100325059370738,
-    'breakfast': 5913264639025615311,
-    'transit': 5246743378917334735,
-    'weekend': 4906978012303458988
-}
+# ... (остальные переменные)
+
+@client.on(events.NewMessage(from_users=target_user_id))
+async def cache_handler(event):
+    if event.message.text:
+        message_cache[event.message.id] = event.message.text
+        # Ограничиваем кеш 500 сообщениями
+        if len(message_cache) > 500:
+            oldest_key = next(iter(message_cache))
+            del message_cache[oldest_key]
+
+@client.on(events.MessageDeleted())
+async def delete_handler(event):
+    for msg_id in event.deleted_ids:
+        if msg_id in message_cache:
+            original_text = message_cache[msg_id]
+            await client.send_message(
+                'me',
+                f"🗑 **Удалено сообщение от {target_user_id}:**\n\n{original_text}"
+            )
+            del message_cache[msg_id]
 
 async def update_status(state: str):
     if state not in emoji_map:
