@@ -26,13 +26,11 @@ KARINA_TOKEN = os.environ.get('KARINA_BOT_TOKEN') # Токен от BotFather
 TARGET_USER_ID = int(os.environ.get('TARGET_USER_ID', 0))
 MY_ID = int(os.environ.get('MY_TELEGRAM_ID', 0)) # Твой личный ID для уведомлений
 
-# Клиент для твоего аккаунта (UserBot)
+# Инициализируем клиентов (без подключения)
 user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
-
-# Клиент для Карины (Bot)
 karina_client = None
 if KARINA_TOKEN:
-    karina_client = TelegramClient('karina_bot', API_ID, API_HASH).start(bot_token=KARINA_TOKEN)
+    karina_client = TelegramClient('karina_bot', API_ID, API_HASH)
 
 # --- Состояние ---
 message_cache = {}
@@ -88,11 +86,6 @@ async def update_emoji_status(state: str):
 
 # --- Логика Карины (Бот-ассистент) ---
 
-if karina_client:
-    @karina_client.on(events.NewMessage(pattern='/start'))
-    async def start_karina(event):
-        await event.respond("Привет! Я Карина, твой личный ассистент. Я буду следить за твоим графиком и напоминать о важном. 😊")
-
 async def send_karina_notification(text: str):
     if karina_client and MY_ID:
         try:
@@ -123,18 +116,21 @@ async def brain_loop():
                 elif 12 <= hour < 18: state = 'day'
                 elif 18 <= hour < 22: state = 'evening'
                 else: state = 'night'
-            await update_emoji_status(state)
+            
+            if user_client.is_connected():
+                await update_emoji_status(state)
 
             # 2. Уведомления от Карины
-            if hour == 8 and 10 <= minute < 12:
-                if last_notif_date != today_str or last_notif_type != 'morning':
-                    await send_karina_notification("☀️ **Доброе утро!**\nПора начинать рабочий день. Желаю успехов! 🚀")
-                    last_notif_date, last_notif_type = today_str, 'morning'
+            if karina_client and karina_client.is_connected():
+                if hour == 8 and 10 <= minute < 15:
+                    if last_notif_date != today_str or last_notif_type != 'morning':
+                        await send_karina_notification("☀️ **Доброе утро!**\nПора начинать рабочий день. Желаю успехов! 🚀")
+                        last_notif_date, last_notif_type = today_str, 'morning'
 
-            elif hour == 16 and 45 <= minute < 47:
-                if last_notif_date != today_str or last_notif_type != 'evening':
-                    await send_karina_notification("🏢 **Пора домой!**\nРабочий день окончен. Не забудь **прогреть машину**! 🚗💨")
-                    last_notif_date, last_notif_type = today_str, 'evening'
+                elif hour == 16 and 45 <= minute < 50:
+                    if last_notif_date != today_str or last_notif_type != 'evening':
+                        await send_karina_notification("🏢 **Пора домой!**\nРабочий день окончен. Не забудь **прогреть машину**! 🚗💨")
+                        last_notif_date, last_notif_type = today_str, 'evening'
 
         except Exception as e:
             logger.error(f"Ошибка в Brain Loop: {e}")
@@ -144,14 +140,21 @@ async def brain_loop():
 
 @app.before_serving
 async def startup():
-    # Запускаем UserBot
+    # 1. Запускаем UserBot
     await user_client.connect()
     if not await user_client.is_user_authorized():
-        raise RuntimeError("UserBot не авторизован!")
+        logger.error("UserBot не авторизован! Проверь SESSION_STRING.")
+        return
     
-    # Запускаем Карину (если есть токен)
+    # 2. Запускаем Карину
     if karina_client:
-        await karina_client.connect()
+        await karina_client.start(bot_token=KARINA_TOKEN)
+        
+        # Регистрация обработчиков Карины после старта
+        @karina_client.on(events.NewMessage(pattern='/start'))
+        async def start_karina(event):
+            await event.respond("Привет! Я Карина, твой личный ассистент. 😊")
+            
         logger.info("🤖 Карина готова к работе!")
 
     logger.info("🚀 Вся система запущена")
@@ -159,7 +162,8 @@ async def startup():
 
 @app.after_serving
 async def shutdown():
-    await user_client.disconnect()
+    if user_client:
+        await user_client.disconnect()
     if karina_client:
         await karina_client.disconnect()
 
