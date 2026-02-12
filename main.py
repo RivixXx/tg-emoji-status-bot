@@ -18,8 +18,16 @@ client = TelegramClient(StringSession(session_string), api_id, api_hash)
 # Кеш сообщений для лога удалений {msg_id: text}
 message_cache = {}
 
-# Твои document_id (оставил как есть)
-# ... (остальные переменные)
+# Твои document_id
+emoji_map = {
+    'morning': 5395463497783983254,
+    'day': 5362079447136610876,
+    'evening': 5375447270852407733,
+    'night': 5247100325059370738,
+    'breakfast': 5913264639025615311,
+    'transit': 5246743378917334735,
+    'weekend': 4906978012303458988
+}
 
 @client.on(events.NewMessage(from_users=target_user_id))
 async def cache_handler(event):
