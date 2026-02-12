@@ -7,195 +7,161 @@ from telethon import TelegramClient, functions, types, events
 from telethon.sessions import StringSession
 from datetime import datetime, timezone, timedelta
 
-# Настройка логирования: выводим в stdout, чтобы Railway не считал это ошибками
+# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO,
     stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
-
-# Приглушаем шум от самой библиотеки Telethon
 logging.getLogger('telethon').setLevel(logging.WARNING)
 
 app = Quart(__name__)
 
-# Ключи из переменных окружения
-api_id = int(os.environ['API_ID'])
-api_hash = os.environ['API_HASH']
-session_string = os.environ['SESSION_STRING']
-target_user_id = int(os.environ.get('TARGET_USER_ID', 0))
-# ID чата для уведомлений (твой ID или ID чата с Кариной)
-notification_chat_id = int(os.environ.get('NOTIFICATION_CHAT_ID', 0))
+# --- Конфигурация ---
+API_ID = int(os.environ['API_ID'])
+API_HASH = os.environ['API_HASH']
+USER_SESSION = os.environ['SESSION_STRING']
+KARINA_TOKEN = os.environ.get('KARINA_BOT_TOKEN') # Токен от BotFather
+TARGET_USER_ID = int(os.environ.get('TARGET_USER_ID', 0))
+MY_ID = int(os.environ.get('MY_TELEGRAM_ID', 0)) # Твой личный ID для уведомлений
 
-client = TelegramClient(StringSession(session_string), api_id, api_hash)
+# Клиент для твоего аккаунта (UserBot)
+user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
 
-# Кеш сообщений для лога удалений {msg_id: text}
+# Клиент для Карины (Bot)
+karina_client = None
+if KARINA_TOKEN:
+    karina_client = TelegramClient('karina_bot', API_ID, API_HASH).start(bot_token=KARINA_TOKEN)
+
+# --- Состояние ---
 message_cache = {}
-# Храним состояние, чтобы не дублировать действия
-current_state = None
-last_notification_date = None # 'YYYY-MM-DD'
-last_notification_type = None # 'morning' или 'evening'
+current_emoji_state = None
+last_notif_date = None
+last_notif_type = None
 
-# Твои document_id (Убедись, что это Custom Emoji ID)
+# Эмодзи-статусы
 emoji_map = {
     'morning': 5395463497783983254,
     'day': 4927197721900614739,
-    'evening': 5377535110289576661,
+    'evening': 5219748856626973291,
     'night': 5247100325059370738,
     'breakfast': 5913264639025615311,
     'transit': 5246743378917334735,
     'weekend': 4906978012303458988
 }
 
-@client.on(events.NewMessage(from_users=target_user_id))
+# --- Логика UserBot (Твой аккаунт) ---
+
+@user_client.on(events.NewMessage(from_users=TARGET_USER_ID))
 async def cache_handler(event):
     if event.message.text:
         message_cache[event.message.id] = event.message.text
         if len(message_cache) > 500:
-            oldest_key = next(iter(message_cache))
-            del message_cache[oldest_key]
+            del message_cache[next(iter(message_cache))]
 
-@client.on(events.MessageDeleted())
+@user_client.on(events.MessageDeleted())
 async def delete_handler(event):
     for msg_id in event.deleted_ids:
         if msg_id in message_cache:
             original_text = message_cache[msg_id]
             try:
-                await client.send_message(
-                    'me',
-                    f"🗑 **Удалено сообщение от {target_user_id}:**\n\n{original_text}"
-                )
+                await user_client.send_message('me', f"🗑 **Удалено сообщение от {TARGET_USER_ID}:**\n\n{original_text}")
             except Exception as e:
-                logger.error(f"Ошибка при отправке уведомления об удалении: {e}")
+                logger.error(f"Ошибка лога удаления: {e}")
             finally:
                 del message_cache[msg_id]
 
-async def update_status(state: str):
-    global current_state
-    
-    if state == current_state:
+async def update_emoji_status(state: str):
+    global current_emoji_state
+    if state == current_emoji_state or state not in emoji_map:
         return
-
-    if state not in emoji_map:
-        logger.error(f"Неизвестное состояние: {state}")
-        return
-    
-    doc_id = emoji_map[state]
     
     try:
-        await client(functions.account.UpdateEmojiStatusRequest(
-            emoji_status=types.EmojiStatus(document_id=doc_id)
+        await user_client(functions.account.UpdateEmojiStatusRequest(
+            emoji_status=types.EmojiStatus(document_id=emoji_map[state])
         ))
-        logger.info(f"✅ Статус успешно изменён на {state} (ID: {doc_id})")
-        current_state = state
+        logger.info(f"✅ Статус аккаунта: {state}")
+        current_emoji_state = state
     except Exception as e:
-        logger.error(f"❌ Ошибка при обновлении статуса ({state}, ID: {doc_id}): {e}")
+        logger.error(f"❌ Ошибка статуса: {e}")
 
-async def periodic_update():
-    global last_notification_date, last_notification_type
+# --- Логика Карины (Бот-ассистент) ---
+
+if karina_client:
+    @karina_client.on(events.NewMessage(pattern='/start'))
+    async def start_karina(event):
+        await event.respond("Привет! Я Карина, твой личный ассистент. Я буду следить за твоим графиком и напоминать о важном. 😊")
+
+async def send_karina_notification(text: str):
+    if karina_client and MY_ID:
+        try:
+            await karina_client.send_message(MY_ID, text)
+            logger.info("📢 Карина отправила уведомление")
+        except Exception as e:
+            logger.error(f"Карина не смогла написать: {e}")
+
+# --- Общий цикл управления ---
+
+async def brain_loop():
+    global last_notif_date, last_notif_type
     moscow_tz = timezone(timedelta(hours=3))
     
     while True:
         try:
             now = datetime.now(moscow_tz)
-            hour = now.hour
-            minute = now.minute
-            weekday = now.weekday()
+            hour, minute, weekday = now.hour, now.minute, now.weekday()
             today_str = now.strftime('%Y-%m-%d')
 
-            # --- Логика эмодзи-статуса ---
-            if weekday >= 5:
-                state = 'weekend'
+            # 1. Обновление статуса (UserBot)
+            if weekday >= 5: state = 'weekend'
             else:
                 time_min = hour * 60 + minute
-                if 420 <= time_min < 430: # 07:00–07:10
-                    state = 'breakfast'
-                elif (430 <= time_min < 480) or (1020 <= time_min < 1080): # 07:10–08:00 или 17:00–18:00
-                    state = 'transit'
-                elif 6 <= hour < 12:
-                    state = 'morning'
-                elif 12 <= hour < 18:
-                    state = 'day'
-                elif 18 <= hour < 22:
-                    state = 'evening'
-                else:
-                    state = 'night'
+                if 420 <= time_min < 430: state = 'breakfast'
+                elif (430 <= time_min < 480) or (1020 <= time_min < 1080): state = 'transit'
+                elif 6 <= hour < 12: state = 'morning'
+                elif 12 <= hour < 18: state = 'day'
+                elif 18 <= hour < 22: state = 'evening'
+                else: state = 'night'
+            await update_emoji_status(state)
 
-            await update_status(state)
+            # 2. Уведомления от Карины
+            if hour == 8 and 10 <= minute < 12:
+                if last_notif_date != today_str or last_notif_type != 'morning':
+                    await send_karina_notification("☀️ **Доброе утро!**\nПора начинать рабочий день. Желаю успехов! 🚀")
+                    last_notif_date, last_notif_type = today_str, 'morning'
 
-            # --- Логика уведомлений ассистента ---
-            if notification_chat_id != 0:
-                # Утреннее приветствие (08:10)
-                if hour == 8 and 10 <= minute < 15:
-                    if last_notification_date != today_str or last_notification_type != 'morning':
-                        try:
-                            await client.send_message(
-                                notification_chat_id,
-                                "☀️ **Доброе утро!**\nПора начинать рабочий день. Желаю продуктивности и отличного настроения! 🚀"
-                            )
-                            last_notification_date = today_str
-                            last_notification_type = 'morning'
-                            logger.info("📢 Отправлено утреннее приветствие")
-                        except Exception as e:
-                            logger.error(f"Ошибка при отправке утреннего уведомления: {e}")
-
-                # Конец дня + прогрев (16:45)
-                elif hour == 16 and 45 <= minute < 50:
-                    if last_notification_date != today_str or last_notification_type != 'evening':
-                        try:
-                            await client.send_message(
-                                notification_chat_id,
-                                "🏢 **Рабочий день подходит к концу!**\nПора закругляться и уходить домой. Не забудь **завести и прогреть машину**! 🚗💨"
-                            )
-                            last_notification_date = today_str
-                            last_notification_type = 'evening'
-                            logger.info("📢 Отправлено вечернее уведомление")
-                        except Exception as e:
-                            logger.error(f"Ошибка при отправке вечернего уведомления: {e}")
+            elif hour == 16 and 45 <= minute < 47:
+                if last_notif_date != today_str or last_notif_type != 'evening':
+                    await send_karina_notification("🏢 **Пора домой!**\nРабочий день окончен. Не забудь **прогреть машину**! 🚗💨")
+                    last_notif_date, last_notif_type = today_str, 'evening'
 
         except Exception as e:
-            logger.error(f"Ошибка в цикле обновления: {e}")
+            logger.error(f"Ошибка в Brain Loop: {e}")
+        await asyncio.sleep(60)
 
-        await asyncio.sleep(60) # Уменьшил интервал до 1 минуты для точности уведомлений
-
-async def get_current_emoji_id():
-    try:
-        me = await client.get_me()
-        if me.emoji_status:
-            logger.info(f"🔍 Текущий ID вашего эмодзи-статуса: {me.emoji_status.document_id}")
-        else:
-            logger.info("🔍 У вас сейчас не установлен эмодзи-статус.")
-    except Exception:
-        pass
+# --- Запуск ---
 
 @app.before_serving
 async def startup():
-    await client.connect()
-    if not await client.is_user_authorized():
-        logger.error("Сессия не авторизована!")
-        raise RuntimeError("Сессия не авторизована! Проверь SESSION_STRING")
+    # Запускаем UserBot
+    await user_client.connect()
+    if not await user_client.is_user_authorized():
+        raise RuntimeError("UserBot не авторизован!")
     
-    logger.info("🚀 Telethon клиент успешно подключён и авторизован")
-    await get_current_emoji_id()
-    asyncio.create_task(periodic_update())
+    # Запускаем Карину (если есть токен)
+    if karina_client:
+        await karina_client.connect()
+        logger.info("🤖 Карина готова к работе!")
 
-@client.on(events.NewMessage(chats='me'))
-async def discovery_handler(event):
-    if event.message.text and event.message.text.lower().startswith('id'):
-        if event.message.entities:
-            found = False
-            for ent in event.message.entities:
-                if isinstance(ent, types.MessageEntityCustomEmoji):
-                    await event.reply(f"Код для emoji_map:\n<code>{ent.document_id}</code>")
-                    found = True
-            if not found:
-                await event.reply("В этом сообщении не найдено кастомных эмодзи.")
+    logger.info("🚀 Вся система запущена")
+    asyncio.create_task(brain_loop())
 
 @app.after_serving
 async def shutdown():
-    await client.disconnect()
-    logger.info("👋 Telethon клиент отключён")
+    await user_client.disconnect()
+    if karina_client:
+        await karina_client.disconnect()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
