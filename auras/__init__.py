@@ -37,14 +37,15 @@ async def update_emoji_aura(user_client):
         else: state = 'night'
     
     if state != _current_state and user_client.is_connected():
+        emoji_id = EMOJI_MAP.get(state)
         try:
             await user_client(functions.account.UpdateEmojiStatusRequest(
-                emoji_status=types.EmojiStatus(document_id=EMOJI_MAP[state])
+                emoji_status=types.InputEmojiStatus(emoji_id=emoji_id)
             ))
-            logger.info(f"✨ Аура: статус аккаунта изменен на {state}")
+            logger.info(f"✨ Аура: статус аккаунта изменен на {state} (ID: {emoji_id})")
             _current_state = state
         except Exception as e:
-            logger.error(f"❌ Ошибка Ауры (статус): {e}")
+            logger.error(f"❌ Ошибка Ауры (статус {state}, ID {emoji_id}): {e}")
 
 async def bio_aura(user_client):
     """Аура динамического БИО (Пн-Пт, 08:00-17:00)"""
