@@ -24,17 +24,25 @@ async def update_emoji_aura(user_client):
     moscow_tz = timezone(timedelta(hours=3))
     now = datetime.now(moscow_tz)
     hour, minute, weekday = now.hour, now.minute, now.weekday()
+    time_min = hour * 60 + minute
     
-    if weekday >= 5: 
-        state = 'weekend'
-    else:
-        time_min = hour * 60 + minute
-        if 420 <= time_min < 430: state = 'breakfast'
-        elif (430 <= time_min < 480) or (1020 <= time_min < 1080): state = 'transit'
-        elif 6 <= hour < 12: state = 'morning'
-        elif 12 <= hour < 18: state = 'day'
-        elif 18 <= hour < 22: state = 'evening'
-        else: state = 'night'
+    if weekday < 5:  # Будни (Пн-Пт)
+        if 0 <= time_min < 420: state = 'sleep'            # 00:00 - 07:00
+        elif 420 <= time_min < 450: state = 'breakfast'    # 07:00 - 07:30
+        elif 450 <= time_min < 480: state = 'transit'      # 07:30 - 08:00
+        elif 480 <= time_min < 720: state = 'work'         # 08:00 - 12:00
+        elif 720 <= time_min < 780: state = 'lunch'        # 12:00 - 13:00
+        elif 780 <= time_min < 1020: state = 'work'        # 13:00 - 17:00
+        elif 1020 <= time_min < 1080: state = 'transit'    # 17:00 - 18:00
+        elif 1080 <= time_min < 1140: state = 'dinner'     # 18:00 - 19:00
+        elif 1140 <= time_min < 1380: state = 'freetime'   # 19:00 - 23:00
+        else: state = 'sleep'                              # 23:00 - 00:00
+    else:  # Выходные (Сб-Вс)
+        if 0 <= time_min < 540: state = 'sleep'            # 00:00 - 09:00
+        elif 540 <= time_min < 720: state = 'morning'      # 09:00 - 12:00
+        elif 720 <= time_min < 1080: state = 'day'         # 12:00 - 18:00
+        elif 1080 <= time_min < 1380: state = 'evening'    # 18:00 - 23:00
+        else: state = 'sleep'                              # 23:00 - 00:00
     
     if state != _current_state and user_client.is_connected():
         emoji_id = EMOJI_MAP.get(state)
