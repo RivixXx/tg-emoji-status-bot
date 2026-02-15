@@ -1,6 +1,7 @@
 import logging
 from telethon import events, types
 from brains.weather import get_weather
+from brains.ai import ask_karina
 
 logger = logging.getLogger(__name__)
 
@@ -33,3 +34,13 @@ def register_karina_base_skills(client):
             await event.respond(f"🌤 **Текущая погода:**\n{info}")
         else:
             await event.respond("К сожалению, не смогла достучаться до сервера погоды. Проверь API_KEY в настройках. ☁️")
+
+    @client.on(events.NewMessage(incoming=True))
+    async def chat_handler(event):
+        """Интеллектуальное общение через LLM"""
+        if event.text and not event.text.startswith('/'):
+            # Отвечаем только в личке
+            if event.is_private:
+                async with client.action(event.chat_id, 'typing'):
+                    response = await ask_karina(event.text)
+                    await event.reply(response)
