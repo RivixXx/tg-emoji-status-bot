@@ -5,7 +5,12 @@ from datetime import datetime, timezone, timedelta
 from telethon import functions, types
 from brains.config import EMOJI_MAP, MY_ID
 from brains.weather import get_weather
-from auras.phrases import BIO_PHRASES
+from auras.phrases import (
+    BIO_PHRASES, 
+    MORNING_GREETINGS, 
+    TIME_MANAGEMENT_ADVICES,
+    WORK_LIFE_BALANCE_PHRASES
+)
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +18,9 @@ logger = logging.getLogger(__name__)
 _current_state = None
 _last_notif_date = None
 _last_notif_type = None
+_is_awake = False  # Флаг пробуждения сегодня
+_last_advice_hour = -1
+_last_overwork_check_date = None  # Дата последней проверки на переработку
 
 # Состояние для Био
 _remaining_phrases = []
@@ -89,9 +97,30 @@ async def bio_aura(user_client):
             except Exception as e:
                 logger.error(f"❌ Ошибка Ауры (Био): {e}")
 
-async def notifications_aura(karina_client):
-    """Аура временных уведомлений Карины"""
-    global _last_notif_date, _last_notif_type
+async def advice_aura(karina_client):
+    """Аура советов по тайм-менеджменту"""
+    global _last_advice_hour, _current_state
+    if not karina_client or not MY_ID: return
+
+    moscow_tz = timezone(timedelta(hours=3))
+    now = datetime.now(moscow_tz)
+    hour = now.hour
+
+    # Даем совет не чаще чем раз в 4 часа и только в активное время
+    if hour % 4 == 0 and hour != _last_advice_hour and 8 <= hour <= 22:
+        state = _current_state
+        if state in TIME_MANAGEMENT_ADVICES:
+            advice = random.choice(TIME_MANAGEMENT_ADVICES[state])
+            try:
+                await karina_client.send_message(MY_ID, f"💡 **Совет по тайм-менеджменту:**\n\n{advice}")
+                _last_advice_hour = hour
+                logger.info(f"💡 Карина отправила совет для состояния: {state}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка Ауры (Советы): {e}")
+
+async def notifications_aura(karina_client, user_client):
+    """Аура временных уведомлений Карины и детектор пробуждения"""
+    global _last_notif_date, _last_notif_type, _is_awake
     if not karina_client or not MY_ID: return
 
     moscow_tz = timezone(timedelta(hours=3))
@@ -99,20 +128,62 @@ async def notifications_aura(karina_client):
     hour, minute = now.hour, now.minute
     today_str = now.strftime('%Y-%m-%d')
 
-    if hour == 8 and 10 <= minute < 15:
-        if _last_notif_date != today_str or _last_notif_type != 'morning':
-            weather_info = await get_weather()
-            msg = "☀️ **Доброе утро!**\nПора начинать рабочий день. Желаю успехов! 🚀"
-            if weather_info:
-                msg += f"\n\n🌤 **Погода сегодня:** {weather_info}"
-            
-            await karina_client.send_message(MY_ID, msg)
-            _last_notif_date, _last_notif_type = today_str, 'morning'
+    # Сброс флага пробуждения в полночь
+    if hour == 0 and minute == 0:
+        _is_awake = False
 
+    # Детектор пробуждения (07:00 - 10:00)
+    if 7 <= hour < 10 and not _is_awake:
+        try:
+            full_user = await user_client(functions.users.GetFullUserRequest(id='me'))
+            status = full_user.users[0].status
+            
+            if isinstance(status, types.UserStatusOnline):
+                _is_awake = True
+                weather_info = await get_weather()
+                
+                category = random.choice(["energetic", "cozy"])
+                base_msg = random.choice(MORNING_GREETINGS[category])
+                
+                weather_msg = ""
+                if weather_info:
+                    w_lower = weather_info.lower()
+                    if any(x in w_lower for x in ["rain", "дождь", "осадки"]): w_type = "rain"
+                    elif any(x in w_lower for x in ["clear", "ясно", "sun", "солн"]): w_type = "sunny"
+                    elif any(x in w_lower for x in ["cloud", "облачно"]): w_type = "cloudy"
+                    elif any(x in w_lower for x in ["snow", "снег", "cold", "холод", "мороз"]): w_type = "cold"
+                    else: w_type = None
+                    
+                    if w_type:
+                        weather_msg = f"\n\n{MORNING_GREETINGS['weather_dependent'][w_type]}"
+                    weather_msg += f"\n\n🌤 **Погода сейчас:** {weather_info}"
+
+                msg = f"✨ **О, ты проснулся!**\n\n{base_msg}{weather_msg}"
+                await karina_client.send_message(MY_ID, msg)
+                logger.info("🌞 Карина заметила пробуждение и отправила приветствие.")
+                _last_notif_date, _last_notif_type = today_str, 'morning'
+        except Exception as e:
+            logger.error(f"❌ Ошибка в детекторе пробуждения: {e}")
+
+    # Вечернее уведомление
     elif hour == 16 and 45 <= minute < 50:
         if _last_notif_date != today_str or _last_notif_type != 'evening':
             await karina_client.send_message(MY_ID, "🏢 **Пора домой!**\nРабочий день окончен. Не забудь **прогреть машину**! 🚗💨")
             _last_notif_date, _last_notif_type = today_str, 'evening'
+
+    # Проверка на переработку (Пн-Пт, с 18:30 до 21:00)
+    elif weekday < 5 and (hour == 18 and minute >= 30 or 19 <= hour < 21):
+        global _last_overwork_check_date
+        if _last_overwork_check_date != today_str:
+            try:
+                full_user = await user_client(functions.users.GetFullUserRequest(id='me'))
+                if isinstance(full_user.users[0].status, types.UserStatusOnline):
+                    msg = f"🧡 **Аура заботы:**\n\n{random.choice(WORK_LIFE_BALANCE_PHRASES)}"
+                    await karina_client.send_message(MY_ID, msg)
+                    _last_overwork_check_date = today_str
+                    logger.info("🌙 Карина отправила напоминание об отдыхе.")
+            except Exception as e:
+                logger.error(f"❌ Ошибка в проверке переработки: {e}")
 
 async def start_auras(user_client, karina_client):
     """Запуск всех фоновых процессов"""
@@ -120,7 +191,8 @@ async def start_auras(user_client, karina_client):
         try:
             await update_emoji_aura(user_client)
             await bio_aura(user_client)
-            await notifications_aura(karina_client)
+            await advice_aura(karina_client)
+            await notifications_aura(karina_client, user_client)
         except Exception as e:
             logger.error(f"Ошибка в основном цикле Аур: {e}")
         await asyncio.sleep(60)
