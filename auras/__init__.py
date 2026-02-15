@@ -40,7 +40,7 @@ async def update_emoji_aura(user_client):
         emoji_id = EMOJI_MAP.get(state)
         try:
             await user_client(functions.account.UpdateEmojiStatusRequest(
-                emoji_status=types.InputEmojiStatus(emoji_id=emoji_id)
+                emoji_status=types.EmojiStatus(document_id=emoji_id)
             ))
             logger.info(f"✨ Аура: статус аккаунта изменен на {state} (ID: {emoji_id})")
             _current_state = state
