@@ -10,7 +10,9 @@ from auras.phrases import (
     BIO_PHRASES, 
     MORNING_GREETINGS, 
     TIME_MANAGEMENT_ADVICES,
-    WORK_LIFE_BALANCE_PHRASES
+    WORK_LIFE_BALANCE_PHRASES,
+    HEALTH_REMINDERS,
+    HEALTH_SCOLDING
 )
 
 logger = logging.getLogger(__name__)
@@ -19,6 +21,9 @@ logger = logging.getLogger(__name__)
 _current_state = None
 _last_notif_date = None
 _last_notif_type = None
+_last_health_notif_date = None  # Для уколов
+_health_reminder_time = None    # Время отправки первого напоминания
+_is_health_confirmed = True     # Подтвержден ли укол сегодня
 _is_awake = False  # Флаг пробуждения сегодня
 _last_advice_hour = -1
 _last_overwork_check_date = None  # Дата последней проверки на переработку
@@ -191,6 +196,47 @@ async def notifications_aura(karina_client, user_client):
             except Exception as e:
                 logger.error(f"❌ Ошибка в проверке переработки: {e}")
 
+async def health_aura(karina_client):
+    """Аура здоровья: напоминание об уколе в 22:00 и контроль ответа"""
+    global _last_health_notif_date, _health_reminder_time, _is_health_confirmed
+    if not karina_client or not MY_ID: return
+
+    moscow_tz = timezone(timedelta(hours=3))
+    now = datetime.now(moscow_tz)
+    today_str = now.strftime('%Y-%m-%d')
+
+    # 1. Первое напоминание в 22:00
+    if now.hour == 22 and 0 <= now.minute < 5:
+        if _last_health_notif_date != today_str:
+            msg = random.choice(HEALTH_REMINDERS) + "\n\n*(Напиши 'сделал', когда закончишь!)*"
+            try:
+                await karina_client.send_message(MY_ID, msg)
+                _last_health_notif_date = today_str
+                _health_reminder_time = now
+                _is_health_confirmed = False
+                logger.info("💉 Карина отправила первое напоминание о здоровье.")
+            except Exception as e:
+                logger.error(f"❌ Ошибка Ауры Здоровья: {e}")
+
+    # 2. Проверка подтверждения через 10 минут
+    if not _is_health_confirmed and _health_reminder_time:
+        diff = now - _health_reminder_time
+        if diff.total_seconds() >= 600: # 10 минут
+            msg = random.choice(HEALTH_SCOLDING)
+            try:
+                await karina_client.send_message(MY_ID, msg)
+                # Чтобы не ворчать каждую минуту, сдвигаем время "последнего ворчания"
+                _health_reminder_time = now 
+                logger.info("😤 Карина начала ворчать про укол.")
+            except Exception as e:
+                logger.error(f"❌ Ошибка Ауры Здоровья (ворчание): {e}")
+
+async def confirm_health():
+    """Функция для внешнего подтверждения укола"""
+    global _is_health_confirmed
+    _is_health_confirmed = True
+    logger.info("✅ Укол подтвержден пользователем.")
+
 async def start_auras(user_client, karina_client):
     """Запуск всех фоновых процессов"""
     while True:
@@ -199,6 +245,7 @@ async def start_auras(user_client, karina_client):
             await bio_aura(user_client)
             await advice_aura(karina_client)
             await notifications_aura(karina_client, user_client)
+            await health_aura(karina_client)
         except Exception as e:
             logger.error(f"Ошибка в основном цикле Аур: {e}")
         await asyncio.sleep(60)

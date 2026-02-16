@@ -5,6 +5,7 @@ from brains.ai import ask_karina
 from brains.news import get_latest_news
 from brains.memory import save_memory
 from brains.calendar import get_upcoming_events, add_calendar
+from auras import confirm_health
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +91,17 @@ def register_karina_base_skills(client):
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
-        """Интеллектуальное общение через LLM"""
+        """Интеллектуальное общение через LLM и детектор подтверждений"""
         if event.text and not event.text.startswith('/'):
-            # Отвечаем только в личке
+            # Проверяем подтверждение здоровья
+            text_low = event.text.lower()
+            confirm_words = ['сделал', 'готово', 'ок', 'окей', 'уколол', 'done', 'укол сделал']
+            if any(word in text_low for word in confirm_words):
+                await confirm_health()
+                await event.respond("Умничка! 🥰 Я спокойна. Продолжай в том же духе!")
+                return
+
+            # Отвечаем только в личке через AI
             if event.is_private:
                 async with client.action(event.chat_id, 'typing'):
                     response = await ask_karina(event.text)
