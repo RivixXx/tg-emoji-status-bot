@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
 MODEL_NAME = "mistral-small-latest"
 
+# Хранилище истории: {chat_id: [messages]}
+CHATS_HISTORY = {}
+
 SYSTEM_PROMPT = """
 Ты — Карина, заботливая и умная цифровая помощница. 
 Твой стиль общения: живой, дружелюбный, слегка игривый, с эмодзи.
@@ -69,27 +72,38 @@ TOOLS = [
     }
 ]
 
-async def ask_karina(prompt: str) -> str:
-    """Запрос к Mistral AI API с поддержкой RAG и Function Calling"""
+async def ask_karina(prompt: str, chat_id: int = 0) -> str:
+    """Запрос к Mistral AI с памятью на 10 сообщений и RAG"""
     if not MISTRAL_API_KEY:
-        return "У меня нет ключа от моих новых мозгов (MISTRAL_API_KEY не задан)... 😔"
+        return "У меня нет ключа от моих новых мозгов... 😔"
 
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     context_memory = await search_memories(prompt)
     
+    # Инициализация истории для чата
+    if chat_id not in CHATS_HISTORY:
+        CHATS_HISTORY[chat_id] = []
+
     headers = {
         "Authorization": f"Bearer {MISTRAL_API_KEY}",
         "Content-Type": "application/json"
     }
 
-    user_message_with_context = prompt
+    # Формируем сообщение пользователя с RAG
+    user_content = prompt
     if context_memory:
-        user_message_with_context = f"КОНТЕКСТ ПАМЯТИ:\n{context_memory}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ: {prompt}"
+        user_content = f"КОНТЕКСТ ПАМЯТИ:\n{context_memory}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ: {prompt}"
+
+    # Добавляем в историю
+    CHATS_HISTORY[chat_id].append({"role": "user", "content": user_content})
+    
+    # Ограничиваем историю 10 сообщениями
+    if len(CHATS_HISTORY[chat_id]) > 10:
+        CHATS_HISTORY[chat_id] = CHATS_HISTORY[chat_id][-10:]
 
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT.format(now=now_str)},
-        {"role": "user", "content": user_message_with_context}
-    ]
+        {"role": "system", "content": SYSTEM_PROMPT.format(now=now_str)}
+    ] + CHATS_HISTORY[chat_id]
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -102,12 +116,12 @@ async def ask_karina(prompt: str) -> str:
             }, headers=headers)
             
             if response.status_code != 200:
-                logger.error(f"Mistral API Error: {response.status_code} - {response.text}")
                 return "Мои мысли спутались... попробуй еще раз? 🧠"
 
             result = response.json()
             message = result['choices'][0]['message']
 
+            # Обработка функций
             if message.get("tool_calls"):
                 for tool_call in message["tool_calls"]:
                     func_name = tool_call["function"]["name"]
@@ -118,22 +132,27 @@ async def ask_karina(prompt: str) -> str:
                             start_dt = datetime.fromisoformat(args["start_time"].replace('Z', ''))
                             success = await create_event(args["summary"], start_dt, args.get("duration", 30))
                             if success:
-                                return f"Сделано! ✅ Записала в календарь: **{args['summary']}** на {start_dt.strftime('%d.%m в %H:%M')}."
+                                res = f"Сделано! ✅ Записала в календарь: **{args['summary']}** на {start_dt.strftime('%d.%m в %H:%M')}."
+                                CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
+                                return res
                         except:
                             return "Не смогла записать в календарь... 🗓"
                     
                     elif func_name == "get_upcoming_calendar_events":
                         events_list = await get_upcoming_events(max_results=args.get("count", 5))
-                        return f"Вот твои ближайшие планы: 😊\n\n{events_list}"
+                        res = f"Вот твои ближайшие планы: 😊\n\n{events_list}"
+                        CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
+                        return res
                     
                     elif func_name == "get_weather_info":
                         weather_data = await get_weather()
-                        if weather_data:
-                            return f"Я узнала! 🌤 Сейчас за окном {weather_data}. Одевайся по погоде! 😊"
-                        else:
-                            return "Не смогла достучаться до метеостанции, но в душе у нас всегда солнце! ☀️"
+                        res = f"Я узнала! 🌤 Сейчас за окном {weather_data}. Одевайся по погоде! 😊"
+                        CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
+                        return res
 
-            return message['content'].strip()
+            response_text = message['content'].strip()
+            CHATS_HISTORY[chat_id].append({"role": "assistant", "content": response_text})
+            return response_text
             
     except Exception as e:
         logger.error(f"Mistral connection error: {e}")

@@ -58,5 +58,5 @@ def register_karina_base_skills(client):
 
         if event.is_private:
             async with client.action(event.chat_id, 'typing'):
-                response = await ask_karina(event.text)
+                response = await ask_karina(event.text, chat_id=event.chat_id)
                 await event.reply(response)

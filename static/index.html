@@ -2,148 +2,95 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Karina Admin Panel</title>
-    
-    <!-- React & Tailwind -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
-    <!-- Three.js (3D Engine) -->
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-
     <style>
-        body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Inter', sans-serif; }
-        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; overflow-y: auto; }
-        .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.05); pointer-events: auto; }
-        .interactive { pointer-events: auto; }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Inter', sans-serif; }
         
-        /* Скроллбар */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 3px; }
+        .bg-karina {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url('karina.jpg');
+            background-size: cover; background-position: center;
+            z-index: -1; filter: brightness(0.6);
+        }
+
+        .bubble {
+            position: absolute; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; animation: float 15s infinite ease-in-out;
+            box-shadow: inset 0 0 20px rgba(255,255,255,0.2);
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); }
+            25% { transform: translateY(-30px) translateX(20px); }
+            50% { transform: translateY(-60px) translateX(-20px); }
+            75% { transform: translateY(-30px) translateX(20px); }
+        }
+
+        .glass-card {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .pop-effect { animation: pop 0.3s forwards; }
+        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.2); opacity: 0.5; } 100% { transform: scale(0); opacity: 0; } }
     </style>
 </head>
 <body>
-    <!-- Слой для 3D -->
-    <div id="canvas-container"></div>
-    <!-- Слой для React UI -->
+    <div class="bg-karina"></div>
     <div id="root"></div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-        // --- 3D Scene Setup ---
-        const init3D = () => {
-            const container = document.getElementById('canvas-container');
-            const scene = new THREE.Scene();
+        const Bubble = ({ icon, label, onClick, color, delay, size, top, left }) => {
+            const [popped, setPopped] = useState(false);
             
-            // Немного тумана для глубины
-            scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
-
-            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 1.2, 3.5); // Позиция камеры
-
-            const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.outputEncoding = THREE.sRGBEncoding;
-            container.appendChild(renderer.domElement);
-
-            // Свет
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-
-            const spotLight = new THREE.SpotLight(0x38bdf8, 5);
-            spotLight.position.set(2, 5, 2);
-            spotLight.angle = 0.5;
-            spotLight.penumbra = 1;
-            scene.add(spotLight);
-            
-            const fillLight = new THREE.PointLight(0xc084fc, 2);
-            fillLight.position.set(-2, 2, 2);
-            scene.add(fillLight);
-
-            // Загрузка модели
-            const loader = new GLTFLoader();
-            let avatar;
-            
-            // ВАЖНО: Сюда вставь ссылку на свою модель .glb
-            // Я пока ставлю красивого робота как заглушку
-            const modelUrl = 'https://models.readyplayer.me/64f02638843c0802241d9e27.glb'; 
-
-            loader.load(modelUrl, (gltf) => {
-                avatar = gltf.scene;
-                avatar.position.set(0, -1.0, 0); // Опускаем пониже
-                avatar.scale.set(1.1, 1.1, 1.1);
-                scene.add(avatar);
-            }, undefined, (error) => {
-                console.error('Ошибка загрузки модели:', error);
-            });
-
-            // Контроллер (чтобы можно было крутить модель)
-            const controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.enablePan = false;
-            controls.enableZoom = false;
-            controls.minPolarAngle = 1.2; // Ограничение вращения по вертикали
-            controls.maxPolarAngle = 1.6;
-
-            // Анимация
-            const animate = () => {
-                requestAnimationFrame(animate);
-                
-                if (avatar) {
-                    // Легкое дыхание/вращение
-                    avatar.rotation.y = Math.sin(Date.now() * 0.0005) * 0.1; 
-                }
-
-                controls.update();
-                renderer.render(scene, camera);
+            const handleClick = () => {
+                setPopped(true);
+                setTimeout(() => {
+                    onClick();
+                    setPopped(false);
+                }, 300);
             };
-            animate();
 
-            // Ресайз
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
+            return (
+                <div 
+                    className={`bubble ${popped ? 'pop-effect' : ''}`}
+                    style={{ 
+                        width: size, height: size, top: top, left: left,
+                        animationDelay: delay, color: color
+                    }}
+                    onClick={handleClick}
+                >
+                    <div className="text-center">
+                        <i className={`fa-solid ${icon} text-2xl`}></i>
+                        <p className="text-[10px] mt-1 font-bold uppercase">{label}</p>
+                    </div>
+                </div>
+            );
         };
 
-        // Запускаем 3D
-        init3D();
-    </script>
-
-    <script type="text/babel">
-        // --- React UI Setup ---
-        const { useState, useEffect } = React;
-
         const App = () => {
+            const [activeTab, setActiveTab] = useState(null);
             const [status, setStatus] = useState({ emoji: '...', health_confirmed: true });
             const [events, setEvents] = useState([]);
             const [search, setSearch] = useState("");
             const [memories, setMemories] = useState("");
-            const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, calendar, memory
 
             useEffect(() => {
                 fetchData();
-                const interval = setInterval(fetchData, 30000);
-                return () => clearInterval(interval);
             }, []);
 
             const fetchData = async () => {
@@ -166,94 +113,78 @@
             };
 
             return (
-                <div id="ui-layer" className="flex flex-col h-full">
-                    {/* Header */}
-                    <header className="p-6 flex justify-between items-center pointer-events-none">
-                        <div>
-                            <h1 className="text-3xl font-bold text-white drop-shadow-md italic">KARINA</h1>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className={`w-2 h-2 rounded-full ${status.health_confirmed ? 'bg-emerald-400' : 'bg-rose-500 animate-pulse'}`}></span>
-                                <span className="text-xs text-sky-200/80 uppercase tracking-widest">
-                                    {status.health_confirmed ? 'SYSTEM NORMAL' : 'ATTENTION REQUIRED'}
-                                </span>
-                            </div>
-                        </div>
-                    </header>
+                <div className="relative w-screen h-screen overflow-hidden text-white">
+                    {/* Пузыри */}
+                    {!activeTab && (
+                        <div className="w-full h-full relative">
+                            <header className="absolute top-10 left-0 w-full text-center">
+                                <h1 className="text-4xl font-black italic tracking-tighter text-sky-400 drop-shadow-lg">KARINA</h1>
+                                <p className="text-sm font-medium text-white/70">Нажми на пузырь, чтобы начать</p>
+                            </header>
 
-                    {/* Main Content Area (Scrollable) */}
-                    <main className="flex-1 p-4 pb-24 overflow-y-auto">
-                        
-                        {/* Status Chips */}
-                        <div className="flex gap-2 mb-6 interactive overflow-x-auto pb-2">
-                            <div className="glass px-4 py-2 rounded-full flex items-center gap-2">
-                                <span className="text-xl">{status.emoji || '✨'}</span>
-                                <span className="text-sm font-medium">Текущий статус</span>
-                            </div>
-                            <div className="glass px-4 py-2 rounded-full flex items-center gap-2">
-                                <i className="fa-solid fa-syringe text-rose-400"></i>
-                                <span className="text-sm font-medium">Укол в 22:00</span>
-                            </div>
+                            <Bubble icon="fa-calendar-day" label="Планы" size="90px" top="30%" left="15%" delay="0s" color="#38bdf8" onClick={() => setActiveTab('calendar')} />
+                            <Bubble icon="fa-brain" label="Память" size="100px" top="45%" left="55%" delay="2s" color="#c084fc" onClick={() => setActiveTab('memory')} />
+                            <Bubble icon="fa-heart-pulse" label="Статус" size="85px" top="65%" left="25%" delay="4s" color="#fb7185" onClick={() => setActiveTab('status')} />
+                            <Bubble icon="fa-gear" label="Настройки" size="80px" top="20%" left="60%" delay="1s" color="#94a3b8" onClick={() => {}} />
                         </div>
+                    )}
 
-                        {/* Calendar Widget */}
-                        {activeTab === 'dashboard' && (
-                            <div className="glass rounded-2xl p-5 mb-4 interactive animate-fade-in">
-                                <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
-                                    <i className="fa-solid fa-calendar-check text-sky-400"></i> Планы
-                                </h2>
-                                {events.length > 0 ? (
-                                    <ul className="space-y-3">
-                                        {events.slice(0, 3).map((ev, i) => (
-                                            <li key={i} className="text-sm text-slate-200 bg-slate-800/40 p-2 rounded-lg border-l-2 border-sky-500">
-                                                {ev}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <p className="text-slate-400 text-sm">Свободно...</p>
+                    {/* Модальные карточки */}
+                    {activeTab && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/40 animate-in fade-in duration-300">
+                            <div className="glass-card w-full max-w-sm rounded-3xl p-6 relative">
+                                <button onClick={() => setActiveTab(null)} className="absolute -top-3 -right-3 w-10 h-10 bg-rose-500 rounded-full flex items-center justify-center shadow-lg">
+                                    <i className="fa-solid fa-xmark"></i>
+                                </button>
+
+                                {activeTab === 'calendar' && (
+                                    <div>
+                                        <h2 className="text-xl font-bold mb-4 flex items-center gap-3">
+                                            <i className="fa-solid fa-calendar text-sky-400"></i> Ближайшие планы
+                                        </h2>
+                                        <ul className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                                            {events.length > 0 ? events.map((ev, i) => (
+                                                <li key={i} className="text-sm bg-white/5 p-3 rounded-xl border-l-4 border-sky-400">{ev}</li>
+                                            )) : <p className="text-slate-400 italic">Событий не найдено...</p>}
+                                        </ul>
+                                    </div>
                                 )}
-                            </div>
-                        )}
 
-                        {/* Memory Widget */}
-                        {(activeTab === 'dashboard' || activeTab === 'memory') && (
-                            <div className="glass rounded-2xl p-5 interactive animate-fade-in">
-                                <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
-                                    <i className="fa-solid fa-brain text-purple-400"></i> Память
-                                </h2>
-                                <div className="flex gap-2 mb-3">
-                                    <input 
-                                        type="text" 
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        placeholder="Найти факт..." 
-                                        className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
-                                    />
-                                    <button onClick={handleSearch} className="bg-purple-600/80 px-3 rounded-lg text-white">
-                                        <i className="fa-solid fa-search"></i>
-                                    </button>
-                                </div>
-                                {memories && (
-                                    <div className="bg-slate-900/60 p-3 rounded-lg text-xs text-slate-300 max-h-32 overflow-y-auto">
-                                        {memories}
+                                {activeTab === 'memory' && (
+                                    <div>
+                                        <h2 className="text-xl font-bold mb-4 flex items-center gap-3">
+                                            <i className="fa-solid fa-brain text-purple-400"></i> Память Карины
+                                        </h2>
+                                        <div className="flex gap-2 mb-4">
+                                            <input 
+                                                type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                                                placeholder="О чем вспомнить?" 
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none"
+                                            />
+                                            <button onClick={handleSearch} className="bg-purple-500 px-4 rounded-xl"><i className="fa-solid fa-search"></i></button>
+                                        </div>
+                                        {memories && <div className="bg-black/40 p-3 rounded-xl text-xs text-slate-300 whitespace-pre-wrap max-h-40 overflow-y-auto">{memories}</div>}
+                                    </div>
+                                )}
+
+                                {activeTab === 'status' && (
+                                    <div className="text-center">
+                                        <h2 className="text-xl font-bold mb-6">Текущее состояние</h2>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-white/5 p-4 rounded-2xl">
+                                                <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Эмодзи</p>
+                                                <p className="text-3xl">{status.emoji || '✨'}</p>
+                                            </div>
+                                            <div className={`bg-white/5 p-4 rounded-2xl border-b-4 ${status.health_confirmed ? 'border-emerald-500' : 'border-rose-500'}`}>
+                                                <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Здоровье</p>
+                                                <p className="text-sm font-bold">{status.health_confirmed ? 'Норма' : 'Нужен укол'}</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
-                        )}
-                    </main>
-
-                    {/* Bottom Nav */}
-                    <nav className="fixed bottom-6 left-6 right-6 h-16 glass rounded-2xl flex justify-around items-center px-2 interactive z-50">
-                        <button onClick={() => setActiveTab('dashboard')} className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'text-sky-400 bg-slate-800/50' : 'text-slate-400'}`}>
-                            <i className="fa-solid fa-house text-xl"></i>
-                        </button>
-                        <button onClick={() => setActiveTab('memory')} className={`p-3 rounded-xl transition-all ${activeTab === 'memory' ? 'text-purple-400 bg-slate-800/50' : 'text-slate-400'}`}>
-                            <i className="fa-solid fa-database text-xl"></i>
-                        </button>
-                        <button className="p-3 rounded-xl text-slate-400 opacity-50 cursor-not-allowed">
-                            <i className="fa-solid fa-gear text-xl"></i>
-                        </button>
-                    </nav>
+                        </div>
+                    )}
                 </div>
             );
         };
