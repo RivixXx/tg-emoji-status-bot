@@ -63,7 +63,7 @@ async def search_memories(query: str, limit: int = 3):
     }
     payload = {
         "query_embedding": vector,
-        "match_threshold": 0.5,
+        "match_threshold": 0.1,
         "match_count": limit
     }
     
@@ -73,12 +73,14 @@ async def search_memories(query: str, limit: int = 3):
             if response.status_code == 200:
                 results = response.json()
                 if not results: 
-                    logger.info(f"🔍 Память: Ничего не найдено по запросу '{query}'")
+                    logger.info(f"🔍 Память: Ничего не найдено (порог 0.1) для '{query}'")
                     return ""
                 
-                logger.info(f"🧠 Память: Найдено {len(results)} релевантных фактов.")
-                memories_text = "\n".join([f"- {r['content']}" for r in results])
-                return f"\nВАЖНАЯ ИНФОРМАЦИЯ ИЗ ТВОЕЙ ПАМЯТИ:\n{memories_text}\n"
+                logger.info(f"🧠 Память: Найдено {len(results)} фактов.")
+                return "\n".join([f"- {r['content']}" for r in results])
+            else:
+                logger.error(f"Supabase RPC Error: {response.status_code} - {response.text}")
+    except Exception as e:
     except Exception as e:
         logger.error(f"Search memory failed: {e}")
     return ""
