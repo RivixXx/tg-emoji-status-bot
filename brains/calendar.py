@@ -53,8 +53,7 @@ async def get_upcoming_events(max_results=5):
         if not all_events:
             return "На ближайшее время планов нет."
         
-        return "
-".join(all_events[:max_results])
+        return "\n".join(all_events[:max_results])
     except Exception as e:
         logger.error(f"Error fetching events: {e}")
         return "Ошибка при получении событий."
