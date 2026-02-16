@@ -1,11 +1,13 @@
 import httpx
 import logging
 import json
+from brains.config import MISTRAL_API_KEY
+from brains.memory import search_memories, save_memory
 
 logger = logging.getLogger(__name__)
 
-AI_SERVER_URL = "http://192.168.3.12:11434/api/generate"
-MODEL_NAME = "llama3.2:3b"
+MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
+MODEL_NAME = "mistral-small-latest"
 
 SYSTEM_PROMPT = """
 Ты — Карина, заботливая и умная цифровая помощница. 
@@ -19,25 +21,40 @@ SYSTEM_PROMPT = """
 """
 
 async def ask_karina(prompt: str) -> str:
-    """Запрос к локальной LLM на сервере"""
+    """Запрос к Mistral AI API с использованием RAG"""
+    if not MISTRAL_API_KEY:
+        return "У меня нет ключа от моих новых мозгов (MISTRAL_API_KEY не задан)... 😔"
+
+    # 1. Поиск в памяти (RAG)
+    context_memory = await search_memories(prompt)
+    
+    headers = {
+        "Authorization": f"Bearer {MISTRAL_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    full_system_prompt = f"{SYSTEM_PROMPT}\n{context_memory}"
+
     payload = {
         "model": MODEL_NAME,
-        "prompt": f"""{SYSTEM_PROMPT}
-
-Пользователь: {prompt}
-Карина:""",
-        "stream": False
+        "messages": [
+            {"role": "system", "content": full_system_prompt},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 500
     }
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(AI_SERVER_URL, json=payload)
+            response = await client.post(MISTRAL_URL, json=payload, headers=headers)
             if response.status_code == 200:
                 result = response.json()
-                return result.get("response", "Ой, я что-то задумалась...").strip()
+                return result['choices'][0]['message']['content'].strip()
             else:
-                logger.error(f"Ошибка AI сервера: {response.status_code}")
-                return "Мои мысли сейчас немного спутаны, давай позже? 🧠"
+                error_data = response.text
+                logger.error(f"Ошибка Mistral API: {response.status_code} - {error_data}")
+                return "Мои мысли сейчас немного спутаны, Mistral капризничает... 🧠"
     except Exception as e:
-        logger.error(f"Ошибка подключения к AI: {e}")
-        return "Кажется, я потеряла связь со своими мозгами на сервере... 🔌"
+        logger.error(f"Ошибка подключения к Mistral: {e}")
+        return "Кажется, я потеряла связь со своим облачным разумом... 🔌"

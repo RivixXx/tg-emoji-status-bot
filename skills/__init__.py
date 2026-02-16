@@ -2,6 +2,7 @@ import logging
 from telethon import events, types
 from brains.weather import get_weather
 from brains.ai import ask_karina
+from brains.news import get_latest_news
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,16 @@ def register_karina_base_skills(client):
             await event.respond(f"🌤 **Текущая погода:**\n{info}")
         else:
             await event.respond("К сожалению, не смогла достучаться до сервера погоды. Проверь API_KEY в настройках. ☁️")
+
+    @client.on(events.NewMessage(pattern='/news'))
+    async def news_command_handler(event):
+        """Скилл: Свежие новости"""
+        await event.respond("Ищу самые интересные новости для тебя... 🗞")
+        news = await get_latest_news()
+        if news:
+            await event.respond(f"🗞 **Вот что интересного произошло:**\n\n{news}")
+        else:
+            await event.respond("Что-то лента новостей пуста. Попробуем позже? ☕")
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):

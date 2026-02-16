@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 from telethon import functions, types
 from brains.config import EMOJI_MAP, MY_ID
 from brains.weather import get_weather
+from brains.news import get_latest_news
 from auras.phrases import (
     BIO_PHRASES, 
     MORNING_GREETINGS, 
@@ -141,6 +142,7 @@ async def notifications_aura(karina_client, user_client):
             if isinstance(status, types.UserStatusOnline):
                 _is_awake = True
                 weather_info = await get_weather()
+                news_info = await get_latest_news(limit=2)
                 
                 category = random.choice(["energetic", "cozy"])
                 base_msg = random.choice(MORNING_GREETINGS[category])
@@ -158,7 +160,11 @@ async def notifications_aura(karina_client, user_client):
                         weather_msg = f"\n\n{MORNING_GREETINGS['weather_dependent'][w_type]}"
                     weather_msg += f"\n\n🌤 **Погода сейчас:** {weather_info}"
 
-                msg = f"✨ **О, ты проснулся!**\n\n{base_msg}{weather_msg}"
+                news_msg = ""
+                if news_info:
+                    news_msg = f"\n\n🗞 **Пока ты спал, кое-что случилось:**\n{news_info}"
+
+                msg = f"✨ **О, ты проснулся!**\n\n{base_msg}{weather_msg}{news_msg}"
                 await karina_client.send_message(MY_ID, msg)
                 logger.info("🌞 Карина заметила пробуждение и отправила приветствие.")
                 _last_notif_date, _last_notif_type = today_str, 'morning'
