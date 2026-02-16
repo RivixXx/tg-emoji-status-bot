@@ -5,6 +5,7 @@ from datetime import datetime
 from brains.config import MISTRAL_API_KEY
 from brains.memory import search_memories, save_memory
 from brains.calendar import create_event, get_upcoming_events
+from brains.weather import get_weather
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,8 @@ SYSTEM_PROMPT = """
 
 ПРАВИЛА ИНСТРУМЕНТОВ:
 1. Если пользователь хочет что-то ЗАПЛАНИРОВАТЬ или НАПОМНИТЬ — используй `create_calendar_event`.
-2. Если пользователь спрашивает "ЧТО У МЕНЯ В ПЛАНАХ", "КАКИЕ СОБЫТИЯ" или "ЧТО В КАЛЕНДАРЕ" — используй `get_upcoming_calendar_events`.
+2. Если пользователь спрашивает о планах или календаре — используй `get_upcoming_calendar_events`.
+3. Если пользователь спрашивает про ПОГОДУ — используй `get_weather_info`.
 Сегодняшняя дата и время: {now}
 """
 
@@ -34,7 +36,7 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "summary": {"type": "string", "description": "Заголовок события"},
-                    "start_time": {"type": "string", "description": "Дата и время в формате ISO (например, 2024-05-15T10:00:00)"},
+                    "start_time": {"type": "string", "description": "Дата и время в формате ISO"},
                     "duration": {"type": "integer", "description": "Длительность в минутах", "default": 30}
                 },
                 "required": ["summary", "start_time"]
@@ -45,12 +47,23 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_upcoming_calendar_events",
-            "description": "Получает список ближайших событий из календаря Google",
+            "description": "Получает список ближайших событий из календаря",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "count": {"type": "integer", "description": "Количество событий", "default": 5}
                 }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather_info",
+            "description": "Получает текущую погоду",
+            "parameters": {
+                "type": "object",
+                "properties": {}
             }
         }
     }
@@ -106,17 +119,19 @@ async def ask_karina(prompt: str) -> str:
                             success = await create_event(args["summary"], start_dt, args.get("duration", 30))
                             if success:
                                 return f"Сделано! ✅ Записала в календарь: **{args['summary']}** на {start_dt.strftime('%d.%m в %H:%M')}."
-                        except Exception as e:
-                            logger.error(f"Calendar Create Error: {e}")
-                            return "Не смогла записать, возникла какая-то заминка с датой... 🗓"
+                        except:
+                            return "Не смогла записать в календарь... 🗓"
                     
                     elif func_name == "get_upcoming_calendar_events":
-                        try:
-                            events_list = await get_upcoming_events(max_results=args.get("count", 5))
-                            return f"Вот что я нашла в твоем расписании: 😊\n\n{events_list}"
-                        except Exception as e:
-                            logger.error(f"Calendar Read Error: {e}")
-                            return "Не удалось заглянуть в твой календарь, прости... 😔"
+                        events_list = await get_upcoming_events(max_results=args.get("count", 5))
+                        return f"Вот твои ближайшие планы: 😊\n\n{events_list}"
+                    
+                    elif func_name == "get_weather_info":
+                        weather_data = await get_weather()
+                        if weather_data:
+                            return f"Я узнала! 🌤 Сейчас за окном {weather_data}. Одевайся по погоде! 😊"
+                        else:
+                            return "Не смогла достучаться до метеостанции, но в душе у нас всегда солнце! ☀️"
 
             return message['content'].strip()
             
