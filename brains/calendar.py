@@ -1,9 +1,13 @@
 import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from brains.config import GOOGLE_CALENDAR_CREDENTIALS
+
+# Подавляем лишние логи от Google
+logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +25,17 @@ def get_calendar_service():
         logger.error(f"Error connecting to Google Calendar: {e}")
         return None
 
-async def get_target_calendar_id(service):
-    """Находит ID календаря пользователя (пропуская технический календарь сервис-аккаунта)"""
+async def get_all_calendars(service):
+    """Возвращает список всех ID календарей, к которым есть доступ"""
     try:
         calendar_list = service.calendarList().list().execute()
-        calendars = calendar_list.get('items', [])
-        
-        # Ищем календарь, который НЕ является техническим адресом сервис-аккаунта
-        for cal in calendars:
-            if 'iam.gserviceaccount.com' not in cal['id']:
-                return cal['id']
-        
-        return 'primary'
-    except:
-        return 'primary'
+        items = calendar_list.get('items', [])
+        ids = [cal['id'] for cal in items]
+        logger.info(f"🔎 Доступные календари: {ids}")
+        return items
+    except Exception as e:
+        logger.error(f"Error listing calendars: {e}")
+        return []
 
 async def get_upcoming_events(max_results=10):
     service = get_calendar_service()
@@ -42,11 +43,12 @@ async def get_upcoming_events(max_results=10):
 
     try:
         now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-        calendar_list = service.calendarList().list().execute()
-        calendars = calendar_list.get('items', [])
+        calendars = await get_all_calendars(service)
         
         if not calendars:
-            return "Я не вижу ни одного доступного календаря. Пожалуйста, поделись своим календарем с моим email: rivix-830@karina-487619.iam.gserviceaccount.com"
+            # Если список пуст, это часто значит, что Google еще не обновил кеш прав.
+            # Попробуем проверить основной календарь сервис-аккаунта (там пусто, но это тест)
+            calendars = [{'id': 'primary', 'summary': 'Очередь (пусто)'}]
 
         all_events = []
         for entry in calendars:
@@ -63,17 +65,16 @@ async def get_upcoming_events(max_results=10):
                 for event in events_result.get('items', []):
                     start = event['start'].get('dateTime', event['start'].get('date'))
                     dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
-                    # Переводим в МСК для отображения
                     dt_msk = dt.astimezone(timezone(timedelta(hours=3)))
                     formatted_start = dt_msk.strftime('%d.%m %H:%M')
                     all_events.append((dt_msk, f"📅 {formatted_start} — {event['summary']} (в: {cal_name})"))
-            except:
+            except Exception as e:
+                logger.warning(f"Ошибка доступа к {cal_id}: {e}")
                 continue
 
         if not all_events:
-            return "На ближайшее время планов нет."
+            return "Я пока не вижу твоих планов. Убедись, что ты поделился календарем с rivix-830@karina-487619.iam.gserviceaccount.com и нажал 'Сохранить' в настройках Google."
         
-        # Сортируем по дате
         all_events.sort(key=lambda x: x[0])
         return "\n".join([e[1] for e in all_events[:max_results]])
     except Exception as e:
@@ -85,24 +86,25 @@ async def create_event(summary, start_time, duration_minutes=30, description=Non
     if not service: return False
 
     try:
-        cal_id = await get_target_calendar_id(service)
+        # Пытаемся найти первый не-технический календарь для записи
+        calendars = await get_all_calendars(service)
+        cal_id = 'primary'
+        for cal in calendars:
+            if 'iam.gserviceaccount.com' not in cal['id']:
+                cal_id = cal['id']
+                break
         
-        # Устанавливаем таймзону МСК, если её нет
         if start_time.tzinfo is None:
             start_time = start_time.replace(tzinfo=timezone(timedelta(hours=3)))
-
-        start = start_time.isoformat()
-        end = (start_time + timedelta(minutes=duration_minutes)).isoformat()
 
         event = {
             'summary': summary,
             'description': description or "Создано Кариной 🤖",
-            'start': {'dateTime': start},
-            'end': {'dateTime': end},
+            'start': {'dateTime': start_time.isoformat()},
+            'end': {'dateTime': (start_time + timedelta(minutes=duration_minutes)).isoformat()},
         }
 
         service.events().insert(calendarId=cal_id, body=event).execute()
-        logger.info(f"Событие '{summary}' создано в календаре {cal_id}")
         return True
     except Exception as e:
         logger.error(f"Error creating event: {e}")
