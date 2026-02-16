@@ -1,11 +1,13 @@
 import logging
 import random
+import os
 from telethon import events, types
 from brains.weather import get_weather
 from brains.ai import ask_karina
 from brains.news import get_latest_news
 from brains.memory import save_memory
 from brains.calendar import get_upcoming_events, add_calendar
+from brains.stt import transcribe_voice
 from auras import confirm_health
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,23 @@ def register_karina_base_skills(client):
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
+        """Интеллектуальное общение (текст + голос)"""
+        # Если пришло голосовое сообщение
+        if event.voice or event.audio:
+            if not event.is_private: return
+            
+            async with client.action(event.chat_id, 'record-audio'):
+                path = await event.download_media(file="voice_msg.ogg")
+                text = await transcribe_voice(path)
+                if os.path.exists(path): os.remove(path)
+                
+                if not text:
+                    await event.reply("Ой, я не смогла разобрать, что ты сказал... 🎤")
+                    return
+                
+                event.text = text
+                logger.info(f"🎤 Голос расшифрован: {text}")
+
         if not event.text or event.text.startswith('/'): return
         
         # Детектор подтверждения здоровья (высокий приоритет)
