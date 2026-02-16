@@ -3,6 +3,7 @@ from telethon import events, types
 from brains.weather import get_weather
 from brains.ai import ask_karina
 from brains.news import get_latest_news
+from brains.memory import save_memory
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,22 @@ def register_karina_base_skills(client):
             await event.respond(f"🗞 **Вот что интересного произошло:**\n\n{news}")
         else:
             await event.respond("Что-то лента новостей пуста. Попробуем позже? ☕")
+
+    @client.on(events.NewMessage(pattern='/remember'))
+    async def remember_command_handler(event):
+        """Скилл: Запомнить факт"""
+        text_to_save = event.text.replace('/remember', '').strip()
+        if not text_to_save:
+            await event.respond("Напиши после команды то, что мне нужно запомнить. Например:\n`/remember У меня аллергия на арахис` 🥜")
+            return
+
+        await event.respond("Записываю в свои электронные чертоги разума... ✍️")
+        success = await save_memory(text_to_save, metadata={"source": "manual_command"})
+        
+        if success:
+            await event.respond("Готово! Я это запомнила и буду учитывать в наших разговорах. 😊")
+        else:
+            await event.respond("Ой, что-то пошло не так при записи. Проверь настройки Supabase. 🛠")
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
