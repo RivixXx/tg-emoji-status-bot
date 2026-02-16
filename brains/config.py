@@ -8,6 +8,7 @@ KARINA_TOKEN = os.environ.get('KARINA_BOT_TOKEN')
 MISTRAL_API_KEY = os.environ.get('MISTRAL_API_KEY')
 SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://prucbyogggkflmxohylo.supabase.co')
 SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBydWNieW9nZ2drZmxteG9oeWxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyNjMyNzEsImV4cCI6MjA4NjgzOTI3MX0.zo9-LytryhxsI-CflDwdYH4-LmaIifP-DTwbzd5OA1U')
+GOOGLE_CALENDAR_CREDENTIALS = os.environ.get('GOOGLE_CALENDAR_CREDENTIALS')
 TARGET_USER_ID = int(os.environ.get('TARGET_USER_ID', 0))
 MY_ID = int(os.environ.get('MY_TELEGRAM_ID', 0))
 

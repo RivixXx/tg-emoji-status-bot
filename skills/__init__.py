@@ -4,6 +4,7 @@ from brains.weather import get_weather
 from brains.ai import ask_karina
 from brains.news import get_latest_news
 from brains.memory import save_memory
+from brains.calendar import get_upcoming_events
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,13 @@ def register_karina_base_skills(client):
             await event.respond("Готово! Я это запомнила и буду учитывать в наших разговорах. 😊")
         else:
             await event.respond("Ой, что-то пошло не так при записи. Проверь настройки Supabase. 🛠")
+
+    @client.on(events.NewMessage(pattern='/calendar'))
+    async def calendar_command_handler(event):
+        """Скилл: Показать календарь"""
+        await event.respond("Секунду, сверяюсь с твоим расписанием... 📅")
+        events_text = await get_upcoming_events()
+        await event.respond(f"🗓 **Ближайшие планы:**\n\n{events_text}")
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
