@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from brains.config import MISTRAL_API_KEY
 from brains.memory import search_memories, save_memory
-from brains.calendar import create_event
+from brains.calendar import create_event, get_upcoming_events
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +18,9 @@ SYSTEM_PROMPT = """
 ГЛАВНОЕ ПРАВИЛО ПАМЯТИ:
 Если предоставлен блок "КОНТЕКСТ ПАМЯТИ", всегда используй эти факты как приоритетные.
 
-ПРАВИЛО КАЛЕНДАРЯ:
-Если пользователь просит что-то запланировать или напомнить, используй функцию `create_calendar_event`.
+ПРАВИЛА ИНСТРУМЕНТОВ:
+1. Если пользователь хочет что-то ЗАПЛАНИРОВАТЬ или НАПОМНИТЬ — используй `create_calendar_event`.
+2. Если пользователь спрашивает "ЧТО У МЕНЯ В ПЛАНАХ", "КАКИЕ СОБЫТИЯ" или "ЧТО В КАЛЕНДАРЕ" — используй `get_upcoming_calendar_events`.
 Сегодняшняя дата и время: {now}
 """
 
@@ -37,6 +38,19 @@ TOOLS = [
                     "duration": {"type": "integer", "description": "Длительность в минутах", "default": 30}
                 },
                 "required": ["summary", "start_time"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_upcoming_calendar_events",
+            "description": "Получает список ближайших событий из календаря Google",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "count": {"type": "integer", "description": "Количество событий", "default": 5}
+                }
             }
         }
     }
@@ -81,22 +95,28 @@ async def ask_karina(prompt: str) -> str:
             result = response.json()
             message = result['choices'][0]['message']
 
-            # Если модель хочет вызвать функцию
             if message.get("tool_calls"):
                 for tool_call in message["tool_calls"]:
-                    if tool_call["function"]["name"] == "create_calendar_event":
-                        args = json.loads(tool_call["function"]["arguments"])
+                    func_name = tool_call["function"]["name"]
+                    args = json.loads(tool_call["function"]["arguments"])
+                    
+                    if func_name == "create_calendar_event":
                         try:
-                            # Парсим ISO строку из LLM
                             start_dt = datetime.fromisoformat(args["start_time"].replace('Z', ''))
                             success = await create_event(args["summary"], start_dt, args.get("duration", 30))
                             if success:
                                 return f"Сделано! ✅ Записала в календарь: **{args['summary']}** на {start_dt.strftime('%d.%m в %H:%M')}."
-                            else:
-                                return "Ой, не удалось достучаться до календаря. Проверь настройки доступа. 📅"
                         except Exception as e:
-                            logger.error(f"Error parsing date or calling calendar: {e}")
-                            return "Что-то не так с датой, я запуталась в календаре... 🗓"
+                            logger.error(f"Calendar Create Error: {e}")
+                            return "Не смогла записать, возникла какая-то заминка с датой... 🗓"
+                    
+                    elif func_name == "get_upcoming_calendar_events":
+                        try:
+                            events_list = await get_upcoming_events(max_results=args.get("count", 5))
+                            return f"Вот что я нашла в твоем расписании: 😊\n\n{events_list}"
+                        except Exception as e:
+                            logger.error(f"Calendar Read Error: {e}")
+                            return "Не удалось заглянуть в твой календарь, прости... 😔"
 
             return message['content'].strip()
             
