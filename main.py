@@ -2,12 +2,14 @@ import os
 import asyncio
 import logging
 import sys
-from quart import Quart
+from quart import Quart, jsonify, request
 from telethon import functions, types
 from brains.clients import user_client, karina_client
 from brains.config import KARINA_TOKEN
+from brains.memory import search_memories
+from brains.calendar import get_upcoming_events
 from skills import register_discovery_skills, register_karina_base_skills
-from auras import start_auras
+from auras import start_auras, state
 
 # Настройка логирования
 logging.basicConfig(
@@ -17,7 +19,39 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Quart(__name__)
+app = Quart(__name__, static_folder='static', static_url_path='')
+
+@app.route('/')
+async def index():
+    """Отдача Mini App"""
+    return await app.send_static_file('index.html')
+
+# --- API для Mini App ---
+
+@app.route('/api/status')
+async def get_status():
+    """Текущее состояние Карины"""
+    return jsonify({
+        "emoji": state.current_emoji_state,
+        "health_confirmed": state.is_health_confirmed,
+        "next_injection": "22:00",
+        "is_awake": state.is_awake
+    })
+
+@app.route('/api/calendar')
+async def get_api_calendar():
+    """События для Mini App"""
+    events = await get_upcoming_events(max_results=10)
+    return jsonify({"events": events.split('\n') if events else []})
+
+@app.route('/api/memory/search')
+async def api_search_memory():
+    """Поиск по памяти для админки"""
+    query = request.args.get('q', '')
+    results = await search_memories(query)
+    return jsonify({"results": results})
+
+# --- Конец API ---
 
 async def setup_bot_commands(client):
     """Установка актуальных команд в меню бота"""

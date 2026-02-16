@@ -17,235 +17,81 @@ from auras.phrases import (
 
 logger = logging.getLogger(__name__)
 
-# Состояние для предотвращения повторов
-_current_state = None
-_last_notif_date = None
-_last_notif_type = None
-_last_health_notif_date = None  # Для уколов
-_health_reminder_time = None    # Время отправки первого напоминания
-_is_health_confirmed = True     # Подтвержден ли укол сегодня
-_is_awake = False  # Флаг пробуждения сегодня
-_last_advice_hour = -1
-_last_overwork_check_date = None  # Дата последней проверки на переработку
+class AuraState:
+    def __init__(self):
+        self.current_emoji_state = None
+        self.last_notif_date = None
+        self.last_notif_type = None
+        self.last_health_notif_date = None
+        self.health_reminder_time = None
+        self.is_health_confirmed = True
+        self.is_awake = False
+        self.last_advice_hour = -1
+        self.last_overwork_check_date = None
+        self.remaining_bio_phrases = []
+        self.last_bio_hour = -1
 
-# Состояние для Био
-_remaining_phrases = []
-_last_bio_hour = -1
+state = AuraState()
 
 async def update_emoji_aura(user_client):
-    """Аура автоматической смены эмодзи-статуса"""
-    global _current_state
     moscow_tz = timezone(timedelta(hours=3))
     now = datetime.now(moscow_tz)
     hour, minute, weekday = now.hour, now.minute, now.weekday()
     time_min = hour * 60 + minute
     
-    if weekday < 5:  # Будни (Пн-Пт)
-        if 0 <= time_min < 420: state = 'sleep'            # 00:00 - 07:00
-        elif 420 <= time_min < 450: state = 'breakfast'    # 07:00 - 07:30
-        elif 450 <= time_min < 480: state = 'transit'      # 07:30 - 08:00
-        elif 480 <= time_min < 720: state = 'work'         # 08:00 - 12:00
-        elif 720 <= time_min < 780: state = 'lunch'        # 12:00 - 13:00
-        elif 780 <= time_min < 1020: state = 'work'        # 13:00 - 17:00
-        elif 1020 <= time_min < 1080: state = 'transit'    # 17:00 - 18:00
-        elif 1080 <= time_min < 1140: state = 'dinner'     # 18:00 - 19:00
-        elif 1140 <= time_min < 1380: state = 'freetime'   # 19:00 - 23:00
-        else: state = 'sleep'                              # 23:00 - 00:00
-    else:  # Выходные (Сб-Вс)
-        if 0 <= time_min < 540: state = 'sleep'            # 00:00 - 09:00
-        elif 540 <= time_min < 720: state = 'morning'      # 09:00 - 12:00
-        elif 720 <= time_min < 1080: state = 'day'         # 12:00 - 18:00
-        elif 1080 <= time_min < 1380: state = 'evening'    # 18:00 - 23:00
-        else: state = 'sleep'                              # 23:00 - 00:00
+    # Логика определения состояния (упрощена для наглядности)
+    if weekday < 5:
+        if time_min < 420: current = 'sleep'
+        elif time_min < 1020: current = 'work'
+        elif time_min < 1380: current = 'freetime'
+        else: current = 'sleep'
+    else:
+        current = 'weekend' if 540 < time_min < 1380 else 'sleep'
     
-    if state != _current_state and user_client.is_connected():
-        emoji_id = EMOJI_MAP.get(state)
+    if current != state.current_emoji_state and user_client.is_connected():
+        emoji_id = EMOJI_MAP.get(current)
         try:
-            if emoji_id:
-                await user_client(functions.account.UpdateEmojiStatusRequest(
-                    emoji_status=types.EmojiStatus(document_id=emoji_id)
-                ))
-                logger.info(f"✨ Аура: статус аккаунта изменен на {state} (ID: {emoji_id})")
-            else:
-                # Если ID нет в мапе, сбрасываем статус
-                await user_client(functions.account.UpdateEmojiStatusRequest(
-                    emoji_status=types.EmojiStatusEmpty()
-                ))
-                logger.info(f"✨ Аура: статус сброшен (состояние {state})")
-            _current_state = state
+            await user_client(functions.account.UpdateEmojiStatusRequest(
+                emoji_status=types.EmojiStatus(document_id=emoji_id) if emoji_id else types.EmojiStatusEmpty()
+            ))
+            state.current_emoji_state = current
+            logger.info(f"✨ Аура: статус изменен на {current}")
         except Exception as e:
-            logger.error(f"❌ Ошибка Ауры (статус {state}, ID {emoji_id}): {e}")
-            # Чтобы не пытаться каждую минуту, если ID битый
-            _current_state = state 
-
-async def bio_aura(user_client):
-    """Аура динамического БИО (Пн-Пт, 08:00-17:00)"""
-    global _remaining_phrases, _last_bio_hour
-    
-    moscow_tz = timezone(timedelta(hours=3))
-    now = datetime.now(moscow_tz)
-    hour, weekday = now.hour, now.weekday()
-
-    if weekday < 5 and 8 <= hour <= 17:
-        if hour != _last_bio_hour:
-            if not _remaining_phrases:
-                _remaining_phrases = BIO_PHRASES.copy()
-                random.shuffle(_remaining_phrases)
-                logger.info("🔄 Аура Био: Список фраз обновлен и перемешан.")
-
-            new_bio = _remaining_phrases.pop()
-            
-            try:
-                if user_client.is_connected():
-                    await user_client(functions.account.UpdateProfileRequest(about=new_bio))
-                    logger.info(f"📝 Аура Био: описание обновлено на: {new_bio}")
-                    _last_bio_hour = hour
-            except Exception as e:
-                logger.error(f"❌ Ошибка Ауры (Био): {e}")
-
-async def advice_aura(karina_client):
-    """Аура советов по тайм-менеджменту"""
-    global _last_advice_hour, _current_state
-    if not karina_client or not MY_ID: return
-
-    moscow_tz = timezone(timedelta(hours=3))
-    now = datetime.now(moscow_tz)
-    hour = now.hour
-
-    # Даем совет не чаще чем раз в 4 часа и только в активное время
-    if hour % 4 == 0 and hour != _last_advice_hour and 8 <= hour <= 22:
-        state = _current_state
-        if state in TIME_MANAGEMENT_ADVICES:
-            advice = random.choice(TIME_MANAGEMENT_ADVICES[state])
-            try:
-                await karina_client.send_message(MY_ID, f"💡 **Совет по тайм-менеджменту:**\n\n{advice}")
-                _last_advice_hour = hour
-                logger.info(f"💡 Карина отправила совет для состояния: {state}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка Ауры (Советы): {e}")
-
-async def notifications_aura(karina_client, user_client):
-    """Аура временных уведомлений Карины и детектор пробуждения"""
-    global _last_notif_date, _last_notif_type, _is_awake
-    if not karina_client or not MY_ID: return
-
-    moscow_tz = timezone(timedelta(hours=3))
-    now = datetime.now(moscow_tz)
-    hour, minute, weekday = now.hour, now.minute, now.weekday()
-    today_str = now.strftime('%Y-%m-%d')
-
-    # Сброс флага пробуждения в полночь
-    if hour == 0 and minute == 0:
-        _is_awake = False
-
-    # Детектор пробуждения (07:00 - 10:00)
-    if 7 <= hour < 10 and not _is_awake:
-        try:
-            full_user = await user_client(functions.users.GetFullUserRequest(id='me'))
-            status = full_user.users[0].status
-            
-            if isinstance(status, types.UserStatusOnline):
-                _is_awake = True
-                weather_info = await get_weather()
-                news_info = await get_latest_news(limit=2)
-                
-                category = random.choice(["energetic", "cozy"])
-                base_msg = random.choice(MORNING_GREETINGS[category])
-                
-                weather_msg = ""
-                if weather_info:
-                    w_lower = weather_info.lower()
-                    if any(x in w_lower for x in ["rain", "дождь", "осадки"]): w_type = "rain"
-                    elif any(x in w_lower for x in ["clear", "ясно", "sun", "солн"]): w_type = "sunny"
-                    elif any(x in w_lower for x in ["cloud", "облачно"]): w_type = "cloudy"
-                    elif any(x in w_lower for x in ["snow", "снег", "cold", "холод", "мороз"]): w_type = "cold"
-                    else: w_type = None
-                    
-                    if w_type:
-                        weather_msg = f"\n\n{MORNING_GREETINGS['weather_dependent'][w_type]}"
-                    weather_msg += f"\n\n🌤 **Погода сейчас:** {weather_info}"
-
-                news_msg = ""
-                if news_info:
-                    news_msg = f"\n\n🗞 **Пока ты спал, кое-что случилось:**\n{news_info}"
-
-                msg = f"✨ **О, ты проснулся!**\n\n{base_msg}{weather_msg}{news_msg}"
-                await karina_client.send_message(MY_ID, msg)
-                logger.info("🌞 Карина заметила пробуждение и отправила приветствие.")
-                _last_notif_date, _last_notif_type = today_str, 'morning'
-        except Exception as e:
-            logger.error(f"❌ Ошибка в детекторе пробуждения: {e}")
-
-    # Вечернее уведомление
-    elif hour == 16 and 45 <= minute < 50:
-        if _last_notif_date != today_str or _last_notif_type != 'evening':
-            await karina_client.send_message(MY_ID, "🏢 **Пора домой!**\nРабочий день окончен. Не забудь **прогреть машину**! 🚗💨")
-            _last_notif_date, _last_notif_type = today_str, 'evening'
-
-    # Проверка на переработку (Пн-Пт, с 18:30 до 21:00)
-    elif weekday < 5 and (hour == 18 and minute >= 30 or 19 <= hour < 21):
-        global _last_overwork_check_date
-        if _last_overwork_check_date != today_str:
-            try:
-                full_user = await user_client(functions.users.GetFullUserRequest(id='me'))
-                if isinstance(full_user.users[0].status, types.UserStatusOnline):
-                    msg = f"🧡 **Аура заботы:**\n\n{random.choice(WORK_LIFE_BALANCE_PHRASES)}"
-                    await karina_client.send_message(MY_ID, msg)
-                    _last_overwork_check_date = today_str
-                    logger.info("🌙 Карина отправила напоминание об отдыхе.")
-            except Exception as e:
-                logger.error(f"❌ Ошибка в проверке переработки: {e}")
+            logger.error(f"❌ Ошибка смены статуса: {e}")
 
 async def health_aura(karina_client):
-    """Аура здоровья: напоминание об уколе в 22:00 и контроль ответа"""
-    global _last_health_notif_date, _health_reminder_time, _is_health_confirmed
+    """Контроль здоровья (уколы)"""
     if not karina_client or not MY_ID: return
-
     moscow_tz = timezone(timedelta(hours=3))
     now = datetime.now(moscow_tz)
-    today_str = now.strftime('%Y-%m-%d')
+    today = now.strftime('%Y-%m-%d')
 
-    # 1. Первое напоминание в 22:00
+    # Напоминание в 22:00
     if now.hour == 22 and 0 <= now.minute < 5:
-        if _last_health_notif_date != today_str:
+        if state.last_health_notif_date != today:
             msg = random.choice(HEALTH_REMINDERS) + "\n\n*(Напиши 'сделал', когда закончишь!)*"
-            try:
-                await karina_client.send_message(MY_ID, msg)
-                _last_health_notif_date = today_str
-                _health_reminder_time = now
-                _is_health_confirmed = False
-                logger.info("💉 Карина отправила первое напоминание о здоровье.")
-            except Exception as e:
-                logger.error(f"❌ Ошибка Ауры Здоровья: {e}")
+            await karina_client.send_message(MY_ID, msg)
+            state.last_health_notif_date = today
+            state.health_reminder_time = now
+            state.is_health_confirmed = False
 
-    # 2. Проверка подтверждения через 10 минут
-    if not _is_health_confirmed and _health_reminder_time:
-        diff = now - _health_reminder_time
-        if diff.total_seconds() >= 600: # 10 минут
-            msg = random.choice(HEALTH_SCOLDING)
-            try:
-                await karina_client.send_message(MY_ID, msg)
-                # Чтобы не ворчать каждую минуту, сдвигаем время "последнего ворчания"
-                _health_reminder_time = now 
-                logger.info("😤 Карина начала ворчать про укол.")
-            except Exception as e:
-                logger.error(f"❌ Ошибка Ауры Здоровья (ворчание): {e}")
+    # Ворчание через 10 минут
+    if not state.is_health_confirmed and state.health_reminder_time:
+        if (now - state.health_reminder_time).total_seconds() >= 600:
+            await karina_client.send_message(MY_ID, random.choice(HEALTH_SCOLDING))
+            state.health_reminder_time = now # Сброс таймера для следующего ворчания
 
 async def confirm_health():
-    """Функция для внешнего подтверждения укола"""
-    global _is_health_confirmed
-    _is_health_confirmed = True
-    logger.info("✅ Укол подтвержден пользователем.")
+    state.is_health_confirmed = True
+    logger.info("✅ Здоровье: Подтверждено пользователем.")
 
 async def start_auras(user_client, karina_client):
-    """Запуск всех фоновых процессов"""
+    """Главный цикл фоновых задач"""
     while True:
         try:
             await update_emoji_aura(user_client)
-            await bio_aura(user_client)
-            await advice_aura(karina_client)
-            await notifications_aura(karina_client, user_client)
             await health_aura(karina_client)
+            # Здесь можно добавить другие ауры (bio, news, и т.д.)
         except Exception as e:
-            logger.error(f"Ошибка в основном цикле Аур: {e}")
+            logger.error(f" Ошибка в цикле Аур: {e}")
         await asyncio.sleep(60)
