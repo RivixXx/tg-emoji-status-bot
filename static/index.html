@@ -4,43 +4,145 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Karina Admin Panel</title>
+    
+    <!-- React & Tailwind -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Three.js (3D Engine) -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
     <style>
-        body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
-        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .neo-glow { box-shadow: 0 0 15px rgba(56, 189, 248, 0.2); }
+        body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Inter', sans-serif; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; overflow-y: auto; }
+        .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.05); pointer-events: auto; }
+        .interactive { pointer-events: auto; }
+        
+        /* Скроллбар */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 3px; }
     </style>
 </head>
 <body>
+    <!-- Слой для 3D -->
+    <div id="canvas-container"></div>
+    <!-- Слой для React UI -->
     <div id="root"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        const Card = ({ title, icon, children, className = "" }) => (
-            <div className={`glass neo-glow rounded-2xl p-6 mb-4 ${className}`}>
-                <div className="flex items-center mb-4">
-                    <i className={`${icon} text-sky-400 mr-3 text-xl`}></i>
-                    <h2 className="text-lg font-semibold">{title}</h2>
-                </div>
-                {children}
-            </div>
-        );
+        // --- 3D Scene Setup ---
+        const init3D = () => {
+            const container = document.getElementById('canvas-container');
+            const scene = new THREE.Scene();
+            
+            // Немного тумана для глубины
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.2, 3.5); // Позиция камеры
+
+            const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            container.appendChild(renderer.domElement);
+
+            // Свет
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const spotLight = new THREE.SpotLight(0x38bdf8, 5);
+            spotLight.position.set(2, 5, 2);
+            spotLight.angle = 0.5;
+            spotLight.penumbra = 1;
+            scene.add(spotLight);
+            
+            const fillLight = new THREE.PointLight(0xc084fc, 2);
+            fillLight.position.set(-2, 2, 2);
+            scene.add(fillLight);
+
+            // Загрузка модели
+            const loader = new GLTFLoader();
+            let avatar;
+            
+            // ВАЖНО: Сюда вставь ссылку на свою модель .glb
+            // Я пока ставлю красивого робота как заглушку
+            const modelUrl = 'https://models.readyplayer.me/64f02638843c0802241d9e27.glb'; 
+
+            loader.load(modelUrl, (gltf) => {
+                avatar = gltf.scene;
+                avatar.position.set(0, -1.0, 0); // Опускаем пониже
+                avatar.scale.set(1.1, 1.1, 1.1);
+                scene.add(avatar);
+            }, undefined, (error) => {
+                console.error('Ошибка загрузки модели:', error);
+            });
+
+            // Контроллер (чтобы можно было крутить модель)
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.enablePan = false;
+            controls.enableZoom = false;
+            controls.minPolarAngle = 1.2; // Ограничение вращения по вертикали
+            controls.maxPolarAngle = 1.6;
+
+            // Анимация
+            const animate = () => {
+                requestAnimationFrame(animate);
+                
+                if (avatar) {
+                    // Легкое дыхание/вращение
+                    avatar.rotation.y = Math.sin(Date.now() * 0.0005) * 0.1; 
+                }
+
+                controls.update();
+                renderer.render(scene, camera);
+            };
+            animate();
+
+            // Ресайз
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        };
+
+        // Запускаем 3D
+        init3D();
+    </script>
+
+    <script type="text/babel">
+        // --- React UI Setup ---
+        const { useState, useEffect } = React;
 
         const App = () => {
             const [status, setStatus] = useState({ emoji: '...', health_confirmed: true });
             const [events, setEvents] = useState([]);
             const [search, setSearch] = useState("");
             const [memories, setMemories] = useState("");
-            const [loading, setLoading] = useState(true);
+            const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, calendar, memory
 
             useEffect(() => {
                 fetchData();
-                const interval = setInterval(fetchData, 30000); // Обновление каждые 30 сек
+                const interval = setInterval(fetchData, 30000);
                 return () => clearInterval(interval);
             }, []);
 
@@ -53,10 +155,7 @@
                     setStatus(await resStatus.json());
                     const calData = await resCal.json();
                     setEvents(calData.events || []);
-                    setLoading(false);
-                } catch (e) {
-                    console.error("Fetch error", e);
-                }
+                } catch (e) { console.error(e); }
             };
 
             const handleSearch = async () => {
@@ -67,68 +166,93 @@
             };
 
             return (
-                <div className="max-w-md mx-auto p-4 pb-20">
-                    <header className="flex justify-between items-center mb-8 pt-4">
+                <div id="ui-layer" className="flex flex-col h-full">
+                    {/* Header */}
+                    <header className="p-6 flex justify-between items-center pointer-events-none">
                         <div>
-                            <h1 className="text-2xl font-bold bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent italic">
-                                Karina AI
-                            </h1>
-                            <p className="text-slate-400 text-sm">Панель управления ассистентом</p>
-                        </div>
-                        <div className="w-12 h-12 rounded-full glass flex items-center justify-center border-sky-500/50 border">
-                            <span className="text-2xl">🤖</span>
+                            <h1 className="text-3xl font-bold text-white drop-shadow-md italic">KARINA</h1>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className={`w-2 h-2 rounded-full ${status.health_confirmed ? 'bg-emerald-400' : 'bg-rose-500 animate-pulse'}`}></span>
+                                <span className="text-xs text-sky-200/80 uppercase tracking-widest">
+                                    {status.health_confirmed ? 'SYSTEM NORMAL' : 'ATTENTION REQUIRED'}
+                                </span>
+                            </div>
                         </div>
                     </header>
 
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="glass p-4 rounded-2xl text-center">
-                            <p className="text-slate-400 text-xs mb-1 uppercase tracking-wider">Статус</p>
-                            <p className="text-2xl font-bold text-sky-400">{status.emoji || 'active'}</p>
+                    {/* Main Content Area (Scrollable) */}
+                    <main className="flex-1 p-4 pb-24 overflow-y-auto">
+                        
+                        {/* Status Chips */}
+                        <div className="flex gap-2 mb-6 interactive overflow-x-auto pb-2">
+                            <div className="glass px-4 py-2 rounded-full flex items-center gap-2">
+                                <span className="text-xl">{status.emoji || '✨'}</span>
+                                <span className="text-sm font-medium">Текущий статус</span>
+                            </div>
+                            <div className="glass px-4 py-2 rounded-full flex items-center gap-2">
+                                <i className="fa-solid fa-syringe text-rose-400"></i>
+                                <span className="text-sm font-medium">Укол в 22:00</span>
+                            </div>
                         </div>
-                        <div className={`glass p-4 rounded-2xl text-center border-l-4 ${status.health_confirmed ? 'border-emerald-500' : 'border-rose-500'}`}>
-                            <p className="text-slate-400 text-xs mb-1 uppercase tracking-wider">Здоровье</p>
-                            <p className="text-xl font-bold">{status.health_confirmed ? 'В норме' : 'Нужен укол!'}</p>
-                        </div>
-                    </div>
 
-                    <Card title="Ближайшие планы" icon="fa-solid fa-calendar-day">
-                        {events.length > 0 ? (
-                            <ul className="space-y-3">
-                                {events.map((ev, i) => (
-                                    <li key={i} className="text-sm border-b border-slate-700/50 pb-2 last:border-0">
-                                        {ev}
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <p className="text-slate-500 text-sm italic text-center py-4">Планов пока нет...</p>
-                        )}
-                    </Card>
-
-                    <Card title="Поиск в памяти" icon="fa-solid fa-brain">
-                        <div className="flex gap-2 mb-4">
-                            <input 
-                                type="text" 
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="О чем вспомнить?" 
-                                className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-sky-500 transition-colors"
-                            />
-                            <button onClick={handleSearch} className="bg-sky-500 hover:bg-sky-600 px-4 rounded-xl transition-colors">
-                                <i className="fa-solid fa-magnifying-glass"></i>
-                            </button>
-                        </div>
-                        {memories && (
-                            <div className="bg-slate-900/80 p-3 rounded-xl text-xs text-slate-300 whitespace-pre-wrap border border-slate-800">
-                                {memories}
+                        {/* Calendar Widget */}
+                        {activeTab === 'dashboard' && (
+                            <div className="glass rounded-2xl p-5 mb-4 interactive animate-fade-in">
+                                <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+                                    <i className="fa-solid fa-calendar-check text-sky-400"></i> Планы
+                                </h2>
+                                {events.length > 0 ? (
+                                    <ul className="space-y-3">
+                                        {events.slice(0, 3).map((ev, i) => (
+                                            <li key={i} className="text-sm text-slate-200 bg-slate-800/40 p-2 rounded-lg border-l-2 border-sky-500">
+                                                {ev}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-slate-400 text-sm">Свободно...</p>
+                                )}
                             </div>
                         )}
-                    </Card>
 
-                    <nav className="fixed bottom-4 left-4 right-4 h-16 glass rounded-2xl flex justify-around items-center px-6">
-                        <button className="text-sky-400"><i className="fa-solid fa-house text-xl"></i></button>
-                        <button className="text-slate-500"><i className="fa-solid fa-database text-xl"></i></button>
-                        <button className="text-slate-500"><i className="fa-solid fa-gear text-xl"></i></button>
+                        {/* Memory Widget */}
+                        {(activeTab === 'dashboard' || activeTab === 'memory') && (
+                            <div className="glass rounded-2xl p-5 interactive animate-fade-in">
+                                <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+                                    <i className="fa-solid fa-brain text-purple-400"></i> Память
+                                </h2>
+                                <div className="flex gap-2 mb-3">
+                                    <input 
+                                        type="text" 
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        placeholder="Найти факт..." 
+                                        className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                                    />
+                                    <button onClick={handleSearch} className="bg-purple-600/80 px-3 rounded-lg text-white">
+                                        <i className="fa-solid fa-search"></i>
+                                    </button>
+                                </div>
+                                {memories && (
+                                    <div className="bg-slate-900/60 p-3 rounded-lg text-xs text-slate-300 max-h-32 overflow-y-auto">
+                                        {memories}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Bottom Nav */}
+                    <nav className="fixed bottom-6 left-6 right-6 h-16 glass rounded-2xl flex justify-around items-center px-2 interactive z-50">
+                        <button onClick={() => setActiveTab('dashboard')} className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'text-sky-400 bg-slate-800/50' : 'text-slate-400'}`}>
+                            <i className="fa-solid fa-house text-xl"></i>
+                        </button>
+                        <button onClick={() => setActiveTab('memory')} className={`p-3 rounded-xl transition-all ${activeTab === 'memory' ? 'text-purple-400 bg-slate-800/50' : 'text-slate-400'}`}>
+                            <i className="fa-solid fa-database text-xl"></i>
+                        </button>
+                        <button className="p-3 rounded-xl text-slate-400 opacity-50 cursor-not-allowed">
+                            <i className="fa-solid fa-gear text-xl"></i>
+                        </button>
                     </nav>
                 </div>
             );
