@@ -61,7 +61,7 @@ async def search_memories(query: str, limit: int = 3):
     }
     payload = {
         "query_embedding": vector,
-        "match_threshold": 0.7,
+        "match_threshold": 0.5,
         "match_count": limit
     }
     
@@ -70,10 +70,13 @@ async def search_memories(query: str, limit: int = 3):
             response = await client.post(SUPABASE_RPC_URL, json=payload, headers=headers)
             if response.status_code == 200:
                 results = response.json()
-                if not results: return ""
+                if not results: 
+                    logger.info(f"🔍 Память: Ничего не найдено по запросу '{query}'")
+                    return ""
                 
+                logger.info(f"🧠 Память: Найдено {len(results)} релевантных фактов.")
                 memories_text = "\n".join([f"- {r['content']}" for r in results])
-                return f"\nТы помнишь следующее из прошлого:\n{memories_text}\n"
+                return f"\nВАЖНАЯ ИНФОРМАЦИЯ ИЗ ТВОЕЙ ПАМЯТИ:\n{memories_text}\n"
     except Exception as e:
         logger.error(f"Search memory failed: {e}")
     return ""
