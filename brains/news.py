@@ -10,7 +10,7 @@ NEWS_RSS_URL = "https://habr.com/ru/rss/hub/transport/all/?fl=ru"
 async def get_latest_news(limit=3):
     """Получает последние новости из RSS ленты"""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             response = await client.get(NEWS_RSS_URL)
             if response.status_code == 200:
                 root = ET.fromstring(response.text)
