@@ -22,10 +22,10 @@ async def ask_karina(prompt: str) -> str:
     """Запрос к локальной LLM на сервере"""
     payload = {
         "model": MODEL_NAME,
-        "prompt": f"{SYSTEM_PROMPT}
+        "prompt": f"""{SYSTEM_PROMPT}
 
 Пользователь: {prompt}
-Карина:",
+Карина:""",
         "stream": False
     }
     

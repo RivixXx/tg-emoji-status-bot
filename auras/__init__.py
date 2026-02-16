@@ -125,7 +125,7 @@ async def notifications_aura(karina_client, user_client):
 
     moscow_tz = timezone(timedelta(hours=3))
     now = datetime.now(moscow_tz)
-    hour, minute = now.hour, now.minute
+    hour, minute, weekday = now.hour, now.minute, now.weekday()
     today_str = now.strftime('%Y-%m-%d')
 
     # Сброс флага пробуждения в полночь
