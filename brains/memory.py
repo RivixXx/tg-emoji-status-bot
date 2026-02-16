@@ -72,12 +72,8 @@ async def search_memories(query: str, limit: int = 3):
                 results = response.json()
                 if not results: return ""
                 
-                memories_text = "
-".join([f"- {r['content']}" for r in results])
-                return f"
-Ты помнишь следующее из прошлого:
-{memories_text}
-"
+                memories_text = "\n".join([f"- {r['content']}" for r in results])
+                return f"\nТы помнишь следующее из прошлого:\n{memories_text}\n"
     except Exception as e:
         logger.error(f"Search memory failed: {e}")
     return ""
