@@ -4,7 +4,7 @@ from brains.weather import get_weather
 from brains.ai import ask_karina
 from brains.news import get_latest_news
 from brains.memory import save_memory
-from brains.calendar import get_upcoming_events
+from brains.calendar import get_upcoming_events, add_calendar
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,23 @@ def register_karina_base_skills(client):
         await event.respond("Секунду, сверяюсь с твоим расписанием... 📅")
         events_text = await get_upcoming_events()
         await event.respond(f"🗓 **Ближайшие планы:**\n\n{events_text}")
+
+    @client.on(events.NewMessage(pattern='/link_email'))
+    async def link_email_handler(event):
+        """Скилл: Связать календарь по email"""
+        email = event.text.replace('/link_email', '').strip()
+        if not email or '@' not in email:
+            await event.respond("Пожалуйста, напиши свой email после команды. Пример:\n`/link_email mikhail@gmail.com` 📧")
+            return
+
+        await event.respond(f"Пытаюсь подключиться к календарю {email}... 🔄")
+        success = await add_calendar(email)
+        if success:
+            await event.respond("Ура! Я успешно подключилась к твоему календарю. Теперь я вижу твои планы! 🎉")
+            # Запомним email в память на будущее
+            await save_memory(f"Мой основной email для календаря: {email}", metadata={"type": "config"})
+        else:
+            await event.respond("Не удалось подключиться. Убедись, что ты поделился доступом к календарю в настройках Google для моего email: `rivix-830@karina-487619.iam.gserviceaccount.com` 🧐")
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):

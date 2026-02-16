@@ -25,17 +25,17 @@ def get_calendar_service():
         logger.error(f"Error connecting to Google Calendar: {e}")
         return None
 
-async def get_all_calendars(service):
-    """Возвращает список всех ID календарей, к которым есть доступ"""
+async def add_calendar(calendar_id):
+    """Принудительно добавляет календарь в список доступных"""
+    service = get_calendar_service()
+    if not service: return False
     try:
-        calendar_list = service.calendarList().list().execute()
-        items = calendar_list.get('items', [])
-        ids = [cal['id'] for cal in items]
-        logger.info(f"🔎 Доступные календари: {ids}")
-        return items
+        service.calendarList().insert(body={'id': calendar_id}).execute()
+        logger.info(f"✅ Календарь {calendar_id} успешно добавлен в список.")
+        return True
     except Exception as e:
-        logger.error(f"Error listing calendars: {e}")
-        return []
+        logger.error(f"Ошибка при добавлении календаря {calendar_id}: {e}")
+        return False
 
 async def get_upcoming_events(max_results=10):
     service = get_calendar_service()
@@ -43,12 +43,13 @@ async def get_upcoming_events(max_results=10):
 
     try:
         now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-        calendars = await get_all_calendars(service)
+        calendar_list = service.calendarList().list().execute()
+        calendars = calendar_list.get('items', [])
         
+        logger.info(f"🔎 Доступные календари: {[c['id'] for c in calendars]}")
+
         if not calendars:
-            # Если список пуст, это часто значит, что Google еще не обновил кеш прав.
-            # Попробуем проверить основной календарь сервис-аккаунта (там пусто, но это тест)
-            calendars = [{'id': 'primary', 'summary': 'Очередь (пусто)'}]
+            return "Я не вижу твоих календарей. Пожалуйста, напиши мне свой email, чтобы я могла 'подключиться' к твоим планам. 😊"
 
         all_events = []
         for entry in calendars:
@@ -68,12 +69,11 @@ async def get_upcoming_events(max_results=10):
                     dt_msk = dt.astimezone(timezone(timedelta(hours=3)))
                     formatted_start = dt_msk.strftime('%d.%m %H:%M')
                     all_events.append((dt_msk, f"📅 {formatted_start} — {event['summary']} (в: {cal_name})"))
-            except Exception as e:
-                logger.warning(f"Ошибка доступа к {cal_id}: {e}")
+            except:
                 continue
 
         if not all_events:
-            return "Я пока не вижу твоих планов. Убедись, что ты поделился календарем с rivix-830@karina-487619.iam.gserviceaccount.com и нажал 'Сохранить' в настройках Google."
+            return "На ближайшее время планов нет."
         
         all_events.sort(key=lambda x: x[0])
         return "\n".join([e[1] for e in all_events[:max_results]])
@@ -86,8 +86,9 @@ async def create_event(summary, start_time, duration_minutes=30, description=Non
     if not service: return False
 
     try:
-        # Пытаемся найти первый не-технический календарь для записи
-        calendars = await get_all_calendars(service)
+        # Ищем первый календарь, который не является техническим
+        calendar_list = service.calendarList().list().execute()
+        calendars = calendar_list.get('items', [])
         cal_id = 'primary'
         for cal in calendars:
             if 'iam.gserviceaccount.com' not in cal['id']:

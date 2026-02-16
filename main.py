@@ -8,6 +8,7 @@ from brains.config import KARINA_TOKEN
 from skills import register_discovery_skills, register_karina_base_skills
 from auras import start_auras
 
+
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
