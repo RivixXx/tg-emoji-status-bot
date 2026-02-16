@@ -44,6 +44,8 @@ async def save_memory(content: str, metadata: dict = None):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(SUPABASE_REST_URL, json=payload, headers=headers)
+            if response.status_code not in [201, 204, 200]:
+                logger.error(f"Supabase Save Error: {response.status_code} - {response.text}")
             return response.status_code in [201, 204, 200]
     except Exception as e:
         logger.error(f"Save memory failed: {e}")
