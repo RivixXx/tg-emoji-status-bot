@@ -19,13 +19,10 @@ async def get_latest_news(limit=3):
                 for item in root.findall('.//item')[:limit]:
                     title = item.find('title').text
                     link = item.find('link').text
-                    news_items.append(f"🔹 {title}
-🔗 {link}")
+                    news_items.append(f"🔹 {title}\n🔗 {link}")
                 
                 if news_items:
-                    return "
-
-".join(news_items)
+                    return "\n\n".join(news_items)
                 return "Сегодня новостей пока нет... ☕"
             else:
                 logger.error(f"Ошибка получения новостей: {response.status_code}")
