@@ -3,11 +3,11 @@ import asyncio
 import logging
 import sys
 from quart import Quart
+from telethon import functions, types
 from brains.clients import user_client, karina_client
 from brains.config import KARINA_TOKEN
 from skills import register_discovery_skills, register_karina_base_skills
 from auras import start_auras
-
 
 # Настройка логирования
 logging.basicConfig(
@@ -18,6 +18,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Quart(__name__)
+
+async def setup_bot_commands(client):
+    """Установка актуальных команд в меню бота"""
+    try:
+        commands = [
+            types.BotCommand(command="start", description="Перезапустить Карину 🔄"),
+            types.BotCommand(command="calendar", description="Показать мои планы 📅"),
+            types.BotCommand(command="news", description="Свежие новости транспорта 🗞"),
+            types.BotCommand(command="weather", description="Прогноз погоды 🌤"),
+            types.BotCommand(command="remember", description="Запомнить факт (после команды) ✍️"),
+            types.BotCommand(command="link_email", description="Привязать Google Календарь 📧"),
+        ]
+        await client(functions.bots.SetBotCommandsRequest(
+            scope=types.BotCommandScopeDefault(),
+            lang_code='ru',
+            commands=commands
+        ))
+        logger.info("✅ Команды меню бота обновлены.")
+    except Exception as e:
+        logger.error(f"❌ Ошибка обновления меню команд: {e}")
 
 @app.before_serving
 async def startup():
@@ -33,6 +53,8 @@ async def startup():
     # 2. Подключаем Карину
     if karina_client:
         await karina_client.start(bot_token=KARINA_TOKEN)
+        # Установка команд в меню
+        await setup_bot_commands(karina_client)
         # Регистрация скиллов для Карины
         register_karina_base_skills(karina_client)
         logger.info("🤖 Карина готова к работе!")
