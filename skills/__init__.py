@@ -6,7 +6,8 @@ from brains.weather import get_weather
 from brains.ai import ask_karina
 from brains.news import get_latest_news
 from brains.memory import save_memory
-from brains.calendar import get_upcoming_events, add_calendar
+from brains.calendar import get_upcoming_events, add_calendar, get_conflict_report
+from brains.health import get_health_report_text, save_health_record
 from brains.stt import transcribe_voice
 from auras import confirm_health
 
@@ -41,6 +42,18 @@ def register_karina_base_skills(client):
     async def calendar_handler(event):
         info = await get_upcoming_events()
         await event.respond(f"🗓 **Твои планы:**\n\n{info}")
+
+    @client.on(events.NewMessage(pattern='/conflicts'))
+    async def conflicts_handler(event):
+        """Скилл: Проверка конфликтов в календаре"""
+        report = await get_conflict_report()
+        await event.respond(report)
+
+    @client.on(events.NewMessage(pattern='/health'))
+    async def health_handler(event):
+        """Скилл: Статистика здоровья"""
+        report = await get_health_report_text(7)
+        await event.respond(report)
 
     @client.on(events.NewMessage(pattern='/news'))
     async def news_handler(event):

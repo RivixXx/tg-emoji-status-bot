@@ -8,6 +8,8 @@ from brains.clients import user_client, karina_client
 from brains.config import KARINA_TOKEN
 from brains.memory import search_memories
 from brains.calendar import get_upcoming_events
+from brains.emotions import get_emotion_state, set_emotion
+from brains.health import get_health_stats, get_health_report_text
 from skills import register_discovery_skills, register_karina_base_skills
 from auras import start_auras, state
 
@@ -51,6 +53,40 @@ async def api_search_memory():
     results = await search_memories(query)
     return jsonify({"results": results})
 
+@app.route('/api/emotion', methods=['GET', 'POST'])
+async def api_emotion():
+    """Эмоциональное состояние Карины"""
+    if request.method == 'POST':
+        data = await request.get_json()
+        text = data.get('text', '')
+        emotion = data.get('emotion', '')
+        
+        if emotion:
+            await set_emotion(emotion)
+            state_data = await get_emotion_state()
+            return jsonify(state_data)
+        elif text:
+            state_data = await get_emotion_state(text)
+            return jsonify(state_data)
+    
+    # GET - текущее состояние
+    state_data = await get_emotion_state()
+    return jsonify(state_data)
+
+@app.route('/api/health')
+async def api_health():
+    """Статистика здоровья"""
+    days = int(request.args.get('days', 7))
+    stats = await get_health_stats(days)
+    return jsonify(stats)
+
+@app.route('/api/health/report')
+async def api_health_report():
+    """Текстовый отчёт о здоровье"""
+    days = int(request.args.get('days', 7))
+    report = await get_health_report_text(days)
+    return jsonify({"report": report, "days": days})
+
 # --- Конец API ---
 
 async def setup_bot_commands(client):
@@ -59,9 +95,11 @@ async def setup_bot_commands(client):
         commands = [
             types.BotCommand(command="start", description="Перезапустить Карину 🔄"),
             types.BotCommand(command="calendar", description="Показать мои планы 📅"),
+            types.BotCommand(command="conflicts", description="Проверить накладки ⚠️"),
+            types.BotCommand(command="health", description="Статистика здоровья ❤️"),
             types.BotCommand(command="news", description="Свежие новости транспорта 🗞"),
             types.BotCommand(command="weather", description="Прогноз погоды 🌤"),
-            types.BotCommand(command="remember", description="Запомнить факт (после команды) ✍️"),
+            types.BotCommand(command="remember", description="Запомнить факт ✍️"),
             types.BotCommand(command="link_email", description="Привязать Google Календарь 📧"),
         ]
         await client(functions.bots.SetBotCommandsRequest(
