@@ -60,7 +60,7 @@ async def api_emotion():
         data = await request.get_json()
         text = data.get('text', '')
         emotion = data.get('emotion', '')
-        
+
         if emotion:
             await set_emotion(emotion)
             state_data = await get_emotion_state()
@@ -68,7 +68,7 @@ async def api_emotion():
         elif text:
             state_data = await get_emotion_state(text)
             return jsonify(state_data)
-    
+
     # GET - текущее состояние
     state_data = await get_emotion_state()
     return jsonify(state_data)
@@ -111,61 +111,89 @@ async def setup_bot_commands(client):
     except Exception as e:
         logger.error(f"❌ Ошибка обновления меню команд: {e}")
 
-@app.before_serving
-async def startup():
-    logger.info("🔧 Запуск системы...")
 
-    # 1. Подключаем UserBot
-    logger.info("📱 Подключение UserBot...")
+async def run_bot():
+    """Запуск бота с обработкой сообщений"""
+    logger.info("🤖 Запуск бота Karina...")
+    
+    if not KARINA_TOKEN:
+        logger.error("❌ KARINA_TOKEN не установлен!")
+        return
+    
+    # Запускаем бота
+    await karina_client.start(bot_token=KARINA_TOKEN)
+    logger.info("✅ Бот Karina запущен")
+    
+    # Установка команд
+    await setup_bot_commands(karina_client)
+    
+    # Регистрация скиллов (хендлеров)
+    register_karina_base_skills(karina_client)
+    logger.info("✅ Скиллы зарегистрированы")
+    logger.info("🤖 Карина готова к работе!")
+    
+    # Бесконечный цикл для обработки событий
+    await karina_client.run_until_disconnected()
+
+
+async def run_web_server():
+    """Запуск веб-сервера"""
+    port = int(os.environ.get('PORT', 8080))
+    logger.info(f"🌐 Запуск веб-сервера на порту {port}...")
+    
+    # Используем Hypercorn для ASGI
+    import hypercorn.asyncio
+    from hypercorn.config import Config
+    
+    config = Config()
+    config.bind = [f"0.0.0.0:{port}"]
+    config.loglevel = "WARNING"
+    
+    await hypercorn.asyncio.serve(app, config)
+
+
+async def run_userbot():
+    """Запуск UserBot"""
+    logger.info("📱 Запуск UserBot...")
     await user_client.connect()
+    
     if not await user_client.is_user_authorized():
         logger.error("❌ UserBot не авторизован!")
         return
-    logger.info("✅ UserBot подключён и авторизован")
-
-    # Регистрация скиллов для UserBot
+    
+    logger.info("✅ UserBot авторизован")
     register_discovery_skills(user_client)
     logger.info("✅ Скиллы UserBot зарегистрированы")
+    
+    # Держим соединение
+    await user_client.run_until_disconnected()
 
-    # 2. Подключаем Карину
-    logger.info(f"🤖 Подключение бота Karina... (token: {'есть' if KARINA_TOKEN else 'НЕТ'})")
-    if karina_client:
-        await karina_client.start(bot_token=KARINA_TOKEN)
-        logger.info("✅ Бот Karina запущен")
 
-        # Установка команд в меню
-        await setup_bot_commands(karina_client)
-        # Регистрация скиллов для Карины
-        register_karina_base_skills(karina_client)
-        logger.info("✅ Скиллы Karina зарегистрированы")
-        
-        # 🚀 Запускаем бота в фоне
-        logger.info("📡 Запуск обработки сообщений (polling)...")
-        
-        async def bot_poller():
-            """Фоновая задача для обработки сообщений бота"""
-            try:
-                await karina_client.run_until_disconnected()
-            except Exception as e:
-                logger.error(f"❌ Бот отключился: {e}")
-        
-        asyncio.create_task(bot_poller())
-        logger.info("🤖 Карина готова к работе!")
+async def run_auras():
+    """Запуск аур"""
+    # Ждём пока бот запустится
+    await asyncio.sleep(2)
+    logger.info("🌀 Запуск аур...")
+    await start_auras(user_client, karina_client)
 
-    logger.info("🚀 Вся система (Мозги, Скиллы, Ауры) запущена")
 
-    # 3. Запускаем Ауры (фоновые задачи)
-    asyncio.create_task(start_auras(user_client, karina_client))
-    logger.info("🌀 Ауры запущены")
+async def main():
+    """Главная функция - запускает всё вместе"""
+    logger.info("🔧 Запуск системы Karina AI...")
+    
+    # Запускаем всё параллельно
+    await asyncio.gather(
+        run_bot(),           # Бот (основной)
+        run_web_server(),    # Веб-сервер
+        run_auras(),         # Ауры
+        return_exceptions=True
+    )
 
-@app.after_serving
-async def shutdown():
-    logger.info("🛑 Остановка системы...")
-    await user_client.disconnect()
-    if karina_client:
-        await karina_client.disconnect()
-    logger.info("✅ Система остановлена")
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("🛑 Остановка по сигналу...")
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
