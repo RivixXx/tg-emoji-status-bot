@@ -1,10 +1,12 @@
 """
 Karina AI - Telegram Bot + Web Server
+Запускает Telethon клиентов в отдельных потоках
 """
 import os
 import asyncio
 import logging
 import sys
+import threading
 from quart import Quart, jsonify, request
 import hypercorn.asyncio
 from hypercorn.config import Config
@@ -134,7 +136,60 @@ async def chat_handler(event):
             response = await ask_karina(event.text, chat_id=event.chat_id)
             await event.reply(response)
 
-# ========== ЗАПУСК ==========
+# ========== ЗАПУСК В ПОТОКАХ ==========
+
+def run_bot_thread():
+    """Запуск бота в отдельном потоке"""
+    logger.info("🤖 Запуск бота (поток)...")
+    
+    async def bot_main():
+        await bot_client.start(bot_token=KARINA_TOKEN)
+        logger.info("✅ Бот запущен")
+        
+        # Команды
+        commands = [
+            types.BotCommand("start", "Перезапустить 🔄"),
+            types.BotCommand("calendar", "Планы 📅"),
+            types.BotCommand("conflicts", "Конфликты ⚠️"),
+            types.BotCommand("health", "Здоровье ❤️"),
+            types.BotCommand("news", "Новости 🗞"),
+        ]
+        await bot_client(functions.bots.SetBotCommandsRequest(
+            scope=types.BotCommandScopeDefault(),
+            lang_code='ru',
+            commands=commands
+        ))
+        logger.info("📡 Бот слушает сообщения...")
+        
+        await bot_client.run_until_disconnected()
+    
+    # Создаём новый event loop для потока
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(bot_main())
+
+def run_userbot_thread():
+    """Запуск UserBot в отдельном потоке"""
+    logger.info("👤 Запуск UserBot (поток)...")
+    
+    async def userbot_main():
+        await user_client.connect()
+        if not await user_client.is_user_authorized():
+            logger.error("❌ UserBot не авторизован!")
+            return
+        logger.info("✅ UserBot авторизован")
+        await user_client.run_until_disconnected()
+    
+    # Создаём новый event loop для потока
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(userbot_main())
+
+async def run_auras():
+    """Запуск аур"""
+    await asyncio.sleep(3)
+    logger.info("🌀 Запуск аур...")
+    await start_auras(user_client, bot_client)
 
 async def run_web():
     """Запуск веб-сервера"""
@@ -147,56 +202,33 @@ async def run_web():
     
     await hypercorn.asyncio.serve(app, config)
 
-async def run_auras():
-    """Запуск аур"""
-    await asyncio.sleep(3)
-    logger.info("🌀 Запуск аур...")
-    await start_auras(user_client, bot_client)
-
-async def main():
+def main():
     """Главная функция"""
     logger.info("🔧 Запуск Karina AI...")
     
-    # 1. Запускаем UserBot
-    logger.info("👤 Запуск UserBot...")
-    await user_client.connect()
-    if not await user_client.is_user_authorized():
-        logger.error("❌ UserBot не авторизован!")
-        return
-    logger.info("✅ UserBot авторизован")
+    # Запускаем бота и UserBot в отдельных потоках
+    bot_thread = threading.Thread(target=run_bot_thread, daemon=True)
+    userbot_thread = threading.Thread(target=run_userbot_thread, daemon=True)
     
-    # 2. Запускаем бота
-    logger.info("🤖 Запуск бота...")
-    await bot_client.start(bot_token=KARINA_TOKEN)
-    logger.info("✅ Бот запущен")
+    bot_thread.start()
+    userbot_thread.start()
     
-    # Команды
-    commands = [
-        types.BotCommand("start", "Перезапустить 🔄"),
-        types.BotCommand("calendar", "Планы 📅"),
-        types.BotCommand("conflicts", "Конфликты ⚠️"),
-        types.BotCommand("health", "Здоровье ❤️"),
-        types.BotCommand("news", "Новости 🗞"),
-    ]
-    await bot_client(functions.bots.SetBotCommandsRequest(
-        scope=types.BotCommandScopeDefault(),
-        lang_code='ru',
-        commands=commands
-    ))
-    logger.info("📡 Бот готов")
+    # Ждём пока клиенты запустятся
+    import time
+    time.sleep(2)
     
-    # 3. Запускаем всё параллельно
-    await asyncio.gather(
+    # Запускаем веб-сервер и ауры в главном потоке
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(asyncio.gather(
         run_web(),
         run_auras(),
-        bot_client.run_until_disconnected(),  # 🚀 ГЛАВНОЕ: обработка событий бота
-        user_client.run_until_disconnected(),  # 🚀 Обработка событий UserBot
         return_exceptions=True
-    )
+    ))
 
 if __name__ == '__main__':
     try:
-        asyncio.run(main())
+        main()
     except KeyboardInterrupt:
         logger.info("🛑 Остановка...")
     except Exception as e:
