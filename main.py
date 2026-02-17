@@ -11,7 +11,7 @@ import hypercorn.asyncio
 from hypercorn.config import Config
 from telethon import functions, types, events, TelegramClient
 from telethon.sessions import StringSession
-from brains.config import API_ID, API_HASH, KARINA_TOKEN
+from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION
 from brains.memory import search_memories
 from brains.calendar import get_upcoming_events, get_conflict_report
 from brains.health import get_health_report_text, get_health_stats
@@ -73,6 +73,10 @@ async def api_health():
 # ========== БОТ ==========
 
 bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
+
+# ========== USERBOT (для emoji статуса) ==========
+
+user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
 
 @bot_client.on(events.NewMessage(pattern='/start'))
 async def start_handler(event):
@@ -158,6 +162,20 @@ async def run_bot():
     # 🚀 ГЛАВНОЕ: запускаем обработку событий Telethon
     await bot_client.run_until_disconnected()
 
+async def run_userbot():
+    """Запуск UserBot (для emoji статуса)"""
+    logger.info("👤 Запуск UserBot...")
+    await user_client.connect()
+    
+    if not await user_client.is_user_authorized():
+        logger.error("❌ UserBot не авторизован!")
+        return
+    
+    logger.info("✅ UserBot авторизован")
+    
+    # Держим соединение
+    await user_client.run_until_disconnected()
+
 async def run_web():
     """Запуск веб-сервера"""
     port = int(os.environ.get('PORT', 8080))
@@ -173,17 +191,18 @@ async def run_auras_task():
     """Запуск аур"""
     await asyncio.sleep(3)
     logger.info("🌀 Запуск аур...")
-    await start_auras(bot_client, bot_client)
+    await start_auras(user_client, bot_client)
 
 async def main():
     """Главная функция"""
     logger.info("🔧 Запуск Karina AI...")
     
-    # Запускаем бота и веб параллельно
+    # Запускаем бота, веб и UserBot параллельно
     await asyncio.gather(
-        run_bot(),
-        run_web(),
-        run_auras_task(),
+        run_bot(),         # Бот (сообщения)
+        run_userbot(),     # UserBot (emoji статус)
+        run_web(),         # Веб-сервер
+        run_auras_task(),  # Ауры
         return_exceptions=True
     )
 
