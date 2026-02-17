@@ -114,7 +114,7 @@ async def setup_bot_commands(client):
 @app.before_serving
 async def startup():
     logger.info("🔧 Запуск системы...")
-    
+
     # 1. Подключаем UserBot
     logger.info("📱 Подключение UserBot...")
     await user_client.connect()
@@ -132,12 +132,24 @@ async def startup():
     if karina_client:
         await karina_client.start(bot_token=KARINA_TOKEN)
         logger.info("✅ Бот Karina запущен")
-        
+
         # Установка команд в меню
         await setup_bot_commands(karina_client)
         # Регистрация скиллов для Карины
         register_karina_base_skills(karina_client)
         logger.info("✅ Скиллы Karina зарегистрированы")
+        
+        # 🚀 Запускаем бота в фоне
+        logger.info("📡 Запуск обработки сообщений (polling)...")
+        
+        async def bot_poller():
+            """Фоновая задача для обработки сообщений бота"""
+            try:
+                await karina_client.run_until_disconnected()
+            except Exception as e:
+                logger.error(f"❌ Бот отключился: {e}")
+        
+        asyncio.create_task(bot_poller())
         logger.info("🤖 Карина готова к работе!")
 
     logger.info("🚀 Вся система (Мозги, Скиллы, Ауры) запущена")
@@ -148,9 +160,11 @@ async def startup():
 
 @app.after_serving
 async def shutdown():
+    logger.info("🛑 Остановка системы...")
     await user_client.disconnect()
     if karina_client:
         await karina_client.disconnect()
+    logger.info("✅ Система остановлена")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
