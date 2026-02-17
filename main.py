@@ -1,6 +1,5 @@
 """
 Karina AI - Telegram Bot + Web Server
-Запускает оба компонента параллельно
 """
 import os
 import asyncio
@@ -70,13 +69,12 @@ async def api_health():
     days = int(request.args.get('days', 7))
     return jsonify(await get_health_stats(days))
 
-# ========== БОТ ==========
+# ========== КЛИЕНТЫ ==========
 
 bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
-
-# ========== USERBOT (для emoji статуса) ==========
-
 user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
+
+# ========== ХЕНДЛЕРЫ БОТА ==========
 
 @bot_client.on(events.NewMessage(pattern='/start'))
 async def start_handler(event):
@@ -138,8 +136,36 @@ async def chat_handler(event):
 
 # ========== ЗАПУСК ==========
 
-async def run_bot():
-    """Запуск бота"""
+async def run_web():
+    """Запуск веб-сервера"""
+    port = int(os.environ.get('PORT', 8080))
+    logger.info(f"🌐 Запуск веб-сервера на порту {port}...")
+    
+    config = Config()
+    config.bind = [f"0.0.0.0:{port}"]
+    config.loglevel = "WARNING"
+    
+    await hypercorn.asyncio.serve(app, config)
+
+async def run_auras():
+    """Запуск аур"""
+    await asyncio.sleep(3)
+    logger.info("🌀 Запуск аур...")
+    await start_auras(user_client, bot_client)
+
+async def main():
+    """Главная функция"""
+    logger.info("🔧 Запуск Karina AI...")
+    
+    # 1. Запускаем UserBot
+    logger.info("👤 Запуск UserBot...")
+    await user_client.connect()
+    if not await user_client.is_user_authorized():
+        logger.error("❌ UserBot не авторизован!")
+        return
+    logger.info("✅ UserBot авторизован")
+    
+    # 2. Запускаем бота
     logger.info("🤖 Запуск бота...")
     await bot_client.start(bot_token=KARINA_TOKEN)
     logger.info("✅ Бот запущен")
@@ -157,55 +183,14 @@ async def run_bot():
         lang_code='ru',
         commands=commands
     ))
-    logger.info("📡 Бот слушает сообщения...")
+    logger.info("📡 Бот готов")
     
-    # 🚀 НЕ используем run_until_disconnected() - он блокирует!
-    # Telethon автоматически обрабатывает события в фоне
-    while True:
-        await asyncio.sleep(1)
-
-async def run_userbot():
-    """Запуск UserBot (для emoji статуса)"""
-    logger.info("👤 Запуск UserBot...")
-    await user_client.connect()
-    
-    if not await user_client.is_user_authorized():
-        logger.error("❌ UserBot не авторизован!")
-        return
-    
-    logger.info("✅ UserBot авторизован")
-    
-    # НЕ блокируем - просто держим соединение
-    while True:
-        await asyncio.sleep(1)
-
-async def run_web():
-    """Запуск веб-сервера"""
-    port = int(os.environ.get('PORT', 8080))
-    logger.info(f"🌐 Запуск веб-сервера на порту {port}...")
-    
-    config = Config()
-    config.bind = [f"0.0.0.0:{port}"]
-    config.loglevel = "WARNING"
-    
-    await hypercorn.asyncio.serve(app, config)
-
-async def run_auras_task():
-    """Запуск аур"""
-    await asyncio.sleep(3)
-    logger.info("🌀 Запуск аур...")
-    await start_auras(user_client, bot_client)
-
-async def main():
-    """Главная функция"""
-    logger.info("🔧 Запуск Karina AI...")
-    
-    # Запускаем бота, веб и UserBot параллельно
+    # 3. Запускаем всё параллельно
     await asyncio.gather(
-        run_bot(),         # Бот (сообщения)
-        run_userbot(),     # UserBot (emoji статус)
-        run_web(),         # Веб-сервер
-        run_auras_task(),  # Ауры
+        run_web(),
+        run_auras(),
+        bot_client.run_until_disconnected(),  # 🚀 ГЛАВНОЕ: обработка событий бота
+        user_client.run_until_disconnected(),  # 🚀 Обработка событий UserBot
         return_exceptions=True
     )
 
