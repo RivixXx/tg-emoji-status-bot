@@ -102,11 +102,19 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
+        console.log("🚀 Mini App: Запуск приложения...");
+        
         // Инициализация Telegram Web App
         const tg = window.Telegram?.WebApp;
+        console.log("📱 Telegram WebApp:", tg ? "найден" : "НЕ найден");
+        
         if (tg) {
+            console.log("ℹ️ Telegram theme:", tg.themeParams);
             tg.ready();
-            tg.expand(); // Развернуть на весь экран
+            tg.expand();
+            console.log("✅ Telegram WebApp инициализирован");
+        } else {
+            console.warn("⚠️ Запуск вне Telegram");
         }
 
         // Цветовые темы для эмоций
@@ -148,6 +156,8 @@
         };
 
         const App = () => {
+            console.log("🎨 App: Рендер...");
+            
             const [activeTab, setActiveTab] = useState(null);
             const [status, setStatus] = useState({ emoji: '...', health_confirmed: true });
             const [events, setEvents] = useState([]);
@@ -156,14 +166,27 @@
             const [emotion, setEmotion] = useState("neutral");
             const [emotionTheme, setEmotionTheme] = useState(EMOTION_THEMES.neutral);
             const [healthStats, setHealthStats] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+            const [error, setError] = useState(null);
 
             useEffect(() => {
-                fetchData();
-                fetchEmotion();
-                // Обновление эмоции каждые 5 секунд
-                const emotionInterval = setInterval(fetchEmotion, 5000);
-                return () => clearInterval(emotionInterval);
+                console.log("🔄 App: Mount...");
+                initApp();
             }, []);
+
+            const initApp = async () => {
+                try {
+                    console.log("📡 Загрузка данных...");
+                    await fetchData();
+                    await fetchEmotion();
+                    setIsLoading(false);
+                    console.log("✅ App: Данные загружены");
+                } catch (err) {
+                    console.error("❌ App: Ошибка инициализации:", err);
+                    setError(err.message);
+                    setIsLoading(false);
+                }
+            };
 
             const fetchData = async () => {
                 try {
@@ -263,27 +286,57 @@
 
             return (
                 <div className="relative w-full h-full overflow-hidden">
+                    {/* Экран загрузки */}
+                    {isLoading && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#020617]">
+                            <div className="text-center">
+                                <div className="text-6xl mb-4 animate-pulse">🤖</div>
+                                <h2 className="text-2xl font-bold text-white mb-2">KARINA</h2>
+                                <p className="text-slate-400 text-sm">Загрузка...</p>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Экран ошибки */}
+                    {error && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#020617] p-6">
+                            <div className="text-center max-w-md">
+                                <div className="text-6xl mb-4">❌</div>
+                                <h2 className="text-xl font-bold text-white mb-2">Ошибка загрузки</h2>
+                                <p className="text-slate-400 text-sm mb-4">{error}</p>
+                                <button 
+                                    onClick={() => window.location.reload()}
+                                    className="bg-sky-500 px-6 py-3 rounded-xl font-bold hover:bg-sky-600 transition"
+                                >
+                                    Обновить
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    
                     {/* Индикатор подключения */}
                     <div className={`absolute top-2 right-2 z-50 px-3 py-1 rounded-full text-xs font-bold ${isOnline ? 'bg-emerald-500/80 text-white' : 'bg-red-500/80 text-white'}`}>
                         {isOnline ? '● Online' : '✕ Offline'}
                     </div>
-                    
-                    {/* Главный экран */}
-                    <div className={`w-full h-full transition-opacity duration-500 ${activeTab ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
-                        <header className="absolute top-12 left-0 w-full text-center px-4">
-                            <h1 className="text-5xl font-black italic tracking-tighter text-white drop-shadow-2xl">KARINA</h1>
-                            <div className="h-1 w-20 bg-sky-500 mx-auto mt-2 rounded-full shadow-[0_0_10px_rgba(56,189,248,0.8)]"></div>
-                        </header>
 
-                        <Bubble icon="fa-calendar-check" label="Планы" size="100px" top="25%" left="10%" delay="0s" color="#38bdf8" onClick={() => setActiveTab('calendar')} />
-                        <Bubble icon="fa-brain" label="Память" size="110px" top="42%" left="52%" delay="2s" color="#c084fc" onClick={() => setActiveTab('memory')} />
-                        <Bubble icon="fa-heart-pulse" label="Статус" size="95px" top="65%" left="15%" delay="4s" color="#fb7185" onClick={() => setActiveTab('status')} />
-                        <Bubble icon="fa-chart-line" label="Здоровье" size="90px" top="60%" left="65%" delay="3s" color="#22c55e" onClick={() => setActiveTab('health')} />
-                        <Bubble icon="fa-gear" label="Опции" size="85px" top="18%" left="65%" delay="1s" color="#94a3b8" onClick={() => {}} />
-                    </div>
+                    {/* Главный экран */}
+                    {!isLoading && !error && (
+                        <div className="relative w-full h-full">
+                            <header className="absolute top-12 left-0 w-full text-center px-4">
+                                <h1 className="text-5xl font-black italic tracking-tighter text-white drop-shadow-2xl">KARINA</h1>
+                                <div className="h-1 w-20 bg-sky-500 mx-auto mt-2 rounded-full shadow-[0_0_10px_rgba(56,189,248,0.8)]"></div>
+                            </header>
+
+                            <Bubble icon="fa-calendar-check" label="Планы" size="100px" top="25%" left="10%" delay="0s" color="#38bdf8" onClick={() => setActiveTab('calendar')} />
+                            <Bubble icon="fa-brain" label="Память" size="110px" top="42%" left="52%" delay="2s" color="#c084fc" onClick={() => setActiveTab('memory')} />
+                            <Bubble icon="fa-heart-pulse" label="Статус" size="95px" top="65%" left="15%" delay="4s" color="#fb7185" onClick={() => setActiveTab('status')} />
+                            <Bubble icon="fa-chart-line" label="Здоровье" size="90px" top="60%" left="65%" delay="3s" color="#22c55e" onClick={() => setActiveTab('health')} />
+                            <Bubble icon="fa-gear" label="Опции" size="85px" top="18%" left="65%" delay="1s" color="#94a3b8" onClick={() => {}} />
+                        </div>
+                    )}
 
                     {/* Модальное окно */}
-                    {activeTab && (
+                    {!isLoading && !error && activeTab && (
                         <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setActiveTab(null)}>
                             <div className="glass-card" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-between items-center mb-6">
