@@ -120,20 +120,28 @@ async def run_bot():
         logger.error("❌ KARINA_TOKEN не установлен!")
         return
     
-    # Запускаем бота
-    await karina_client.start(bot_token=KARINA_TOKEN)
-    logger.info("✅ Бот Karina запущен")
-    
-    # Установка команд
-    await setup_bot_commands(karina_client)
-    
-    # Регистрация скиллов (хендлеров)
-    register_karina_base_skills(karina_client)
-    logger.info("✅ Скиллы зарегистрированы")
-    logger.info("🤖 Карина готова к работе!")
-    
-    # Бесконечный цикл для обработки событий
-    await karina_client.run_until_disconnected()
+    try:
+        # Запускаем бота
+        await karina_client.start(bot_token=KARINA_TOKEN)
+        logger.info("✅ Бот Karina запущен")
+        
+        # Установка команд
+        await setup_bot_commands(karina_client)
+        
+        # Регистрация скиллов (хендлеров)
+        register_karina_base_skills(karina_client)
+        logger.info("✅ Скиллы зарегистрированы")
+        logger.info("🤖 Карина готова к работе!")
+        logger.info("📡 Бот слушает сообщения...")
+        
+        # 🚀 ГЛАВНОЕ: запускаем обработку событий
+        # Создадим задачу которая будет держать соединение
+        while True:
+            await asyncio.sleep(1)
+            # Telethon автоматически обрабатывает события в фоне
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска бота: {e}", exc_info=True)
 
 
 async def run_web_server():
@@ -152,23 +160,6 @@ async def run_web_server():
     await hypercorn.asyncio.serve(app, config)
 
 
-async def run_userbot():
-    """Запуск UserBot"""
-    logger.info("📱 Запуск UserBot...")
-    await user_client.connect()
-    
-    if not await user_client.is_user_authorized():
-        logger.error("❌ UserBot не авторизован!")
-        return
-    
-    logger.info("✅ UserBot авторизован")
-    register_discovery_skills(user_client)
-    logger.info("✅ Скиллы UserBot зарегистрированы")
-    
-    # Держим соединение
-    await user_client.run_until_disconnected()
-
-
 async def run_auras():
     """Запуск аур"""
     # Ждём пока бот запустится
@@ -181,10 +172,12 @@ async def main():
     """Главная функция - запускает всё вместе"""
     logger.info("🔧 Запуск системы Karina AI...")
     
-    # Запускаем всё параллельно
+    # Сначала запускаем бота (чтобы зарегистрировать хендлеры)
+    await run_bot()
+    
+    # Потом запускаем всё параллельно
     await asyncio.gather(
-        run_bot(),           # Бот (основной)
-        run_web_server(),    # Веб-сервер
+        run_web_server(),    # Веб-сервер (основной)
         run_auras(),         # Ауры
         return_exceptions=True
     )
