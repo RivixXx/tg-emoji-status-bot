@@ -1,6 +1,7 @@
 import httpx
 import logging
 import json
+import asyncio
 from brains.config import MISTRAL_API_KEY, SUPABASE_URL, SUPABASE_KEY
 
 logger = logging.getLogger(__name__)
@@ -9,19 +10,31 @@ MISTRAL_EMBED_URL = "https://api.mistral.ai/v1/embeddings"
 SUPABASE_RPC_URL = f"{SUPABASE_URL}/rest/v1/rpc/match_memories"
 SUPABASE_REST_URL = f"{SUPABASE_URL}/rest/v1/memories"
 
-async def get_embedding(text: str):
-    """Генерирует векторное представление текста через Mistral"""
+async def get_embedding(text: str, max_retries=3):
+    """Генерирует векторное представление текста через Mistral с retry для 429"""
     headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
     payload = {"model": "mistral-embed", "input": [text]}
+
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(MISTRAL_EMBED_URL, json=payload, headers=headers)
+                
+                if response.status_code == 200:
+                    return response.json()['data'][0]['embedding']
+                elif response.status_code == 429:
+                    wait_time = (attempt + 1) * 2
+                    logger.warning(f"⚠️ Mistral Embed rate limit (429). Попытка {attempt + 1}/{max_retries}. Жду {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"Mistral Embed Error: {response.status_code}")
+                    return None
+        except Exception as e:
+            logger.error(f"Embedding failed (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
     
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(MISTRAL_EMBED_URL, json=payload, headers=headers)
-            if response.status_code == 200:
-                return response.json()['data'][0]['embedding']
-            logger.error(f"Mistral Embed Error: {response.status_code}")
-    except Exception as e:
-        logger.error(f"Embedding failed: {e}")
+    logger.error(f"Mistral Embed: Превышено количество попыток ({max_retries})")
     return None
 
 async def save_memory(content: str, metadata: dict = None):

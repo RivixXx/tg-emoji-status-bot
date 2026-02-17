@@ -13,6 +13,12 @@ logger = logging.getLogger(__name__)
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
+# Кэш для календаря: {timestamp: (events_text, expire_at)}
+_calendar_cache = {
+    "events": None,
+    "expire_at": None
+}
+
 def get_calendar_service():
     if not GOOGLE_CALENDAR_CREDENTIALS:
         logger.error("GOOGLE_CALENDAR_CREDENTIALS not set!")
@@ -37,15 +43,24 @@ async def add_calendar(calendar_id):
         logger.error(f"Ошибка при добавлении календаря {calendar_id}: {e}")
         return False
 
-async def get_upcoming_events(max_results=10):
+async def get_upcoming_events(max_results=10, force_refresh=False):
+    """Получает список предстоящих событий с кэшированием (TTL 5 минут)"""
+    now = datetime.now(timezone.utc)
+    
+    # Проверка кэша
+    if not force_refresh and _calendar_cache["events"] and _calendar_cache["expire_at"]:
+        if now < _calendar_cache["expire_at"]:
+            logger.debug("📅 Календарь: используем кэш")
+            return _calendar_cache["events"]
+    
     service = get_calendar_service()
     if not service: return "Не удалось подключиться к календарю."
 
     try:
-        now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        now_iso = now.isoformat().replace('+00:00', 'Z')
         calendar_list = service.calendarList().list().execute()
         calendars = calendar_list.get('items', [])
-        
+
         logger.info(f"🔎 Доступные календари: {[c['id'] for c in calendars]}")
 
         if not calendars:
@@ -55,14 +70,14 @@ async def get_upcoming_events(max_results=10):
         for entry in calendars:
             cal_id = entry['id']
             cal_name = entry.get('summary', 'Календарь')
-            
+
             try:
                 events_result = service.events().list(
-                    calendarId=cal_id, timeMin=now,
+                    calendarId=cal_id, timeMin=now_iso,
                     maxResults=5, singleEvents=True,
                     orderBy='startTime'
                 ).execute()
-                
+
                 for event in events_result.get('items', []):
                     start = event['start'].get('dateTime', event['start'].get('date'))
                     dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
@@ -73,10 +88,18 @@ async def get_upcoming_events(max_results=10):
                 continue
 
         if not all_events:
-            return "На ближайшее время планов нет."
+            result = "На ближайшее время планов нет."
+        else:
+            all_events.sort(key=lambda x: x[0])
+            result = "\n".join([e[1] for e in all_events[:max_results]])
         
-        all_events.sort(key=lambda x: x[0])
-        return "\n".join([e[1] for e in all_events[:max_results]])
+        # Сохранение в кэш (TTL 5 минут)
+        _calendar_cache["events"] = result
+        _calendar_cache["expire_at"] = now + timedelta(minutes=5)
+        logger.debug(f"📅 Календарь: обновлён кэш (TTL 5 мин)")
+        
+        return result
+        
     except Exception as e:
         logger.error(f"Error fetching events: {e}")
         return "Ошибка при получении событий."

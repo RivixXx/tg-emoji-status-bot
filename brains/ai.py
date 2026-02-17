@@ -1,6 +1,7 @@
 import httpx
 import logging
 import json
+import asyncio
 from datetime import datetime
 from brains.config import MISTRAL_API_KEY
 from brains.memory import search_memories, save_memory
@@ -10,7 +11,31 @@ from brains.weather import get_weather
 logger = logging.getLogger(__name__)
 
 MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
+MISTRAL_EMBED_URL = "https://api.mistral.ai/v1/embeddings"
 MODEL_NAME = "mistral-small-latest"
+
+async def mistral_request_with_retry(client, url, headers, payload, max_retries=3):
+    """Запрос к Mistral API с retry для 429 ошибок"""
+    for attempt in range(max_retries):
+        try:
+            response = await client.post(url, json=payload, headers=headers)
+            
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 429:
+                wait_time = (attempt + 1) * 2  # 2s, 4s, 6s
+                logger.warning(f"⚠️ Mistral API rate limit (429). Попытка {attempt + 1}/{max_retries}. Жду {wait_time}s...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error(f"Mistral API Error: {response.status_code} - {response.text[:200]}")
+                return None
+        except httpx.RequestError as e:
+            logger.error(f"Request error (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+    
+    logger.error(f"Mistral API: Превышено количество попыток ({max_retries})")
+    return None
 
 # Хранилище истории: {chat_id: [messages]}
 CHATS_HISTORY = {}
@@ -107,18 +132,20 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(MISTRAL_URL, json={
-                "model": MODEL_NAME,
-                "messages": messages,
-                "tools": TOOLS,
-                "tool_choice": "auto",
-                "temperature": 0.3
-            }, headers=headers)
+            result = await mistral_request_with_retry(
+                client, MISTRAL_URL, headers,
+                {
+                    "model": MODEL_NAME,
+                    "messages": messages,
+                    "tools": TOOLS,
+                    "tool_choice": "auto",
+                    "temperature": 0.3
+                }
+            )
             
-            if response.status_code != 200:
+            if not result:
                 return "Мои мысли спутались... попробуй еще раз? 🧠"
-
-            result = response.json()
+            
             message = result['choices'][0]['message']
 
             # Обработка функций

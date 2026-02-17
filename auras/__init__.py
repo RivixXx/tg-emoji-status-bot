@@ -3,12 +3,13 @@ import logging
 import random
 from datetime import datetime, timezone, timedelta
 from telethon import functions, types
+from telethon.errors import PersistentTimestampOutdatedError
 from brains.config import EMOJI_MAP, MY_ID
 from brains.weather import get_weather
 from brains.news import get_latest_news
 from auras.phrases import (
-    BIO_PHRASES, 
-    MORNING_GREETINGS, 
+    BIO_PHRASES,
+    MORNING_GREETINGS,
     TIME_MANAGEMENT_ADVICES,
     WORK_LIFE_BALANCE_PHRASES,
     HEALTH_REMINDERS,
@@ -87,11 +88,37 @@ async def confirm_health():
 
 async def start_auras(user_client, karina_client):
     """Главный цикл фоновых задач"""
+    reconnect_attempts = 0
+    max_reconnect_attempts = 5
+    
     while True:
         try:
             await update_emoji_aura(user_client)
             await health_aura(karina_client)
             # Здесь можно добавить другие ауры (bio, news, и т.д.)
+            reconnect_attempts = 0  # Сброс счётчика ошибок при успешной итерации
+            
+        except PersistentTimestampOutdatedError as e:
+            logger.warning(f"⚠️ Telegram: рассинхронизация timestamp (попытка {reconnect_attempts + 1}/{max_reconnect_attempts})")
+            reconnect_attempts += 1
+            
+            if reconnect_attempts >= max_reconnect_attempts:
+                logger.error("❌ Превышено количество попыток переподключения. Требуется рестарт.")
+                await asyncio.sleep(300)  # Ждём 5 минут перед следующей попыткой
+                reconnect_attempts = 0
+            else:
+                # Переподключение к Telegram
+                try:
+                    logger.info("🔄 Переподключение к Telegram...")
+                    if user_client.is_connected():
+                        await user_client.disconnect()
+                    await asyncio.sleep(5)
+                    await user_client.connect()
+                    logger.info("✅ Переподключение успешно.")
+                except Exception as reconnect_err:
+                    logger.error(f"❌ Ошибка переподключения: {reconnect_err}")
+                    await asyncio.sleep(30)
+                    
         except Exception as e:
             logger.error(f" Ошибка в цикле Аур: {e}")
-        await asyncio.sleep(60)
+            await asyncio.sleep(60)
