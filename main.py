@@ -159,8 +159,10 @@ async def run_bot():
     ))
     logger.info("📡 Бот слушает сообщения...")
     
-    # 🚀 ГЛАВНОЕ: запускаем обработку событий Telethon
-    await bot_client.run_until_disconnected()
+    # 🚀 НЕ используем run_until_disconnected() - он блокирует!
+    # Telethon автоматически обрабатывает события в фоне
+    while True:
+        await asyncio.sleep(1)
 
 async def run_userbot():
     """Запуск UserBot (для emoji статуса)"""
@@ -173,8 +175,9 @@ async def run_userbot():
     
     logger.info("✅ UserBot авторизован")
     
-    # Держим соединение
-    await user_client.run_until_disconnected()
+    # НЕ блокируем - просто держим соединение
+    while True:
+        await asyncio.sleep(1)
 
 async def run_web():
     """Запуск веб-сервера"""
