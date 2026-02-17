@@ -113,28 +113,38 @@ async def setup_bot_commands(client):
 
 @app.before_serving
 async def startup():
+    logger.info("🔧 Запуск системы...")
+    
     # 1. Подключаем UserBot
+    logger.info("📱 Подключение UserBot...")
     await user_client.connect()
     if not await user_client.is_user_authorized():
-        logger.error("UserBot не авторизован!")
+        logger.error("❌ UserBot не авторизован!")
         return
-    
+    logger.info("✅ UserBot подключён и авторизован")
+
     # Регистрация скиллов для UserBot
     register_discovery_skills(user_client)
+    logger.info("✅ Скиллы UserBot зарегистрированы")
 
     # 2. Подключаем Карину
+    logger.info(f"🤖 Подключение бота Karina... (token: {'есть' if KARINA_TOKEN else 'НЕТ'})")
     if karina_client:
         await karina_client.start(bot_token=KARINA_TOKEN)
+        logger.info("✅ Бот Karina запущен")
+        
         # Установка команд в меню
         await setup_bot_commands(karina_client)
         # Регистрация скиллов для Карины
         register_karina_base_skills(karina_client)
+        logger.info("✅ Скиллы Karina зарегистрированы")
         logger.info("🤖 Карина готова к работе!")
 
     logger.info("🚀 Вся система (Мозги, Скиллы, Ауры) запущена")
-    
+
     # 3. Запускаем Ауры (фоновые задачи)
     asyncio.create_task(start_auras(user_client, karina_client))
+    logger.info("🌀 Ауры запущены")
 
 @app.after_serving
 async def shutdown():

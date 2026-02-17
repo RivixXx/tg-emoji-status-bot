@@ -8,4 +8,4 @@ user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
 # Клиент Karina (Бот)
 karina_client = None
 if KARINA_TOKEN:
-    karina_client = TelegramClient('karina_bot', API_ID, API_HASH)
+    karina_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
