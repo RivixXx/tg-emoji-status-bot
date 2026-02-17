@@ -50,3 +50,5 @@
 - **Database**: Supabase (PostgreSQL + pgvector).
 - **AI**: Mistral AI API (Embeddings & Chat).
 - **Calendar**: Google Calendar API (Service Account).
+
+
