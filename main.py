@@ -178,18 +178,16 @@ def run_userbot_thread():
             logger.error("❌ UserBot не авторизован!")
             return
         logger.info("✅ UserBot авторизован")
+        
+        # Запускаем ауры в том же потоке что и UserBot
+        asyncio.create_task(start_auras(user_client, bot_client))
+        
         await user_client.run_until_disconnected()
     
     # Создаём новый event loop для потока
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(userbot_main())
-
-async def run_auras():
-    """Запуск аур"""
-    await asyncio.sleep(3)
-    logger.info("🌀 Запуск аур...")
-    await start_auras(user_client, bot_client)
 
 async def run_web():
     """Запуск веб-сервера"""
@@ -217,14 +215,10 @@ def main():
     import time
     time.sleep(2)
     
-    # Запускаем веб-сервер и ауры в главном потоке
+    # Запускаем веб-сервер в главном потоке
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(asyncio.gather(
-        run_web(),
-        run_auras(),
-        return_exceptions=True
-    ))
+    loop.run_until_complete(run_web())
 
 if __name__ == '__main__':
     try:
