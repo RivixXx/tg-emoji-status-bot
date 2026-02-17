@@ -2,13 +2,16 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Karina Admin Panel</title>
     
+    <!-- Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
     <!-- Скрипты -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
@@ -99,6 +102,13 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
+        // Инициализация Telegram Web App
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand(); // Развернуть на весь экран
+        }
+
         // Цветовые темы для эмоций
         const EMOTION_THEMES = {
             neutral: { primary: "#38bdf8", secondary: "#94a3b8", bg: "linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(2, 6, 23, 0.9))" },
@@ -161,15 +171,25 @@
                         fetch('/api/status'),
                         fetch('/api/calendar')
                     ]);
+                    if (!resStatus.ok || !resCal.ok) {
+                        throw new Error(`HTTP error: ${resStatus.status}/${resCal.status}`);
+                    }
                     setStatus(await resStatus.json());
                     const calData = await resCal.json();
                     setEvents(calData.events || []);
-                } catch (e) { console.error("Data fetch error", e); }
+                } catch (e) { 
+                    console.error("Data fetch error", e);
+                    // Показываем пользователю ошибку
+                    alert("Ошибка загрузки данных. Проверьте соединение.");
+                }
             };
 
             const fetchEmotion = async () => {
                 try {
                     const res = await fetch('/api/emotion');
+                    if (!res.ok) {
+                        throw new Error(`HTTP error: ${res.status}`);
+                    }
                     const data = await res.json();
                     if (data.emotion) {
                         setEmotion(data.emotion);
@@ -177,7 +197,9 @@
                         setEmotionTheme(theme);
                         applyEmotionTheme(theme, data.emotion);
                     }
-                } catch (e) { console.error("Emotion fetch error", e); }
+                } catch (e) { 
+                    console.error("Emotion fetch error", e);
+                }
             };
 
             const applyEmotionTheme = (theme, emotionName) => {
@@ -224,9 +246,28 @@
                     }
                 } catch (e) { console.error("Emotion test error", e); }
             };
+            
+            // Проверка подключения
+            const [isOnline, setIsOnline] = useState(navigator.onLine);
+            
+            useEffect(() => {
+                const handleOnline = () => setIsOnline(true);
+                const handleOffline = () => setIsOnline(false);
+                window.addEventListener('online', handleOnline);
+                window.addEventListener('offline', handleOffline);
+                return () => {
+                    window.removeEventListener('online', handleOnline);
+                    window.removeEventListener('offline', handleOffline);
+                };
+            }, []);
 
             return (
                 <div className="relative w-full h-full overflow-hidden">
+                    {/* Индикатор подключения */}
+                    <div className={`absolute top-2 right-2 z-50 px-3 py-1 rounded-full text-xs font-bold ${isOnline ? 'bg-emerald-500/80 text-white' : 'bg-red-500/80 text-white'}`}>
+                        {isOnline ? '● Online' : '✕ Offline'}
+                    </div>
+                    
                     {/* Главный экран */}
                     <div className={`w-full h-full transition-opacity duration-500 ${activeTab ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
                         <header className="absolute top-12 left-0 w-full text-center px-4">
