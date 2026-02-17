@@ -25,6 +25,7 @@ def register_discovery_skills(client):
 def register_karina_base_skills(client):
     @client.on(events.NewMessage(pattern='/start'))
     async def start_handler(event):
+        logger.info(f"📩 /start от пользователя {event.chat_id}")
         await event.respond(
             "Привет! Я Карина. 😊\n\nЯ теперь не просто бот, у меня есть удобная панель управления! Нажми кнопку ниже или используй /app.",
             buttons=[types.KeyboardButtonWebView("Открыть панель 📱", url="https://tg-emoji-status-bot-production.up.railway.app/")]
@@ -33,6 +34,7 @@ def register_karina_base_skills(client):
     @client.on(events.NewMessage(pattern='/app'))
     async def app_command_handler(event):
         """Скилл: Открыть Mini App"""
+        logger.info(f"📩 /app от пользователя {event.chat_id}")
         await event.respond(
             "Твоя персональная панель управления Кариной:",
             buttons=[types.KeyboardButtonWebView("Открыть панель 📱", url="https://tg-emoji-status-bot-production.up.railway.app/")]
@@ -40,55 +42,71 @@ def register_karina_base_skills(client):
 
     @client.on(events.NewMessage(pattern='/calendar'))
     async def calendar_handler(event):
+        logger.info(f"📩 /calendar от пользователя {event.chat_id}")
         info = await get_upcoming_events()
         await event.respond(f"🗓 **Твои планы:**\n\n{info}")
 
     @client.on(events.NewMessage(pattern='/conflicts'))
     async def conflicts_handler(event):
         """Скилл: Проверка конфликтов в календаре"""
+        logger.info(f"📩 /conflicts от пользователя {event.chat_id}")
         report = await get_conflict_report()
         await event.respond(report)
 
     @client.on(events.NewMessage(pattern='/health'))
     async def health_handler(event):
         """Скилл: Статистика здоровья"""
+        logger.info(f"📩 /health от пользователя {event.chat_id}")
         report = await get_health_report_text(7)
         await event.respond(report)
 
     @client.on(events.NewMessage(pattern='/news'))
     async def news_handler(event):
+        logger.info(f"📩 /news от пользователя {event.chat_id}")
         news = await get_latest_news()
         await event.respond(f"🗞 **Новости:**\n\n{news}")
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
         """Интеллектуальное общение (текст + голос)"""
+        logger.info(f"📩 Сообщение от {event.chat_id}: {event.text[:50] if event.text else 'no text'}")
+        
         # Если пришло голосовое сообщение
         if event.voice or event.audio:
-            if not event.is_private: return
-            
+            logger.info(f"🎤 Голосовое сообщение от {event.chat_id}")
+            if not event.is_private: 
+                logger.info("⚠️ Пропуск (не личный чат)")
+                return
+
             async with client.action(event.chat_id, 'record-audio'):
                 path = await event.download_media(file="voice_msg.ogg")
                 text = await transcribe_voice(path)
                 if os.path.exists(path): os.remove(path)
-                
+
                 if not text:
                     await event.reply("Ой, я не смогла разобрать, что ты сказал... 🎤")
                     return
-                
+
                 event.text = text
                 logger.info(f"🎤 Голос расшифрован: {text}")
 
-        if not event.text or event.text.startswith('/'): return
-        
+        if not event.text or event.text.startswith('/'): 
+            logger.info(f"⚠️ Пропуск (нет текста или команда)")
+            return
+
         # Детектор подтверждения здоровья (высокий приоритет)
         text_low = event.text.lower()
         if any(word in text_low for word in ['сделал', 'готово', 'окей', 'уколол']):
+            logger.info(f"✅ Подтверждение здоровья от {event.chat_id}")
             await confirm_health()
             await event.respond(random.choice(["Умничка! 🥰", "Так держать! 👍", "Я спокойна. 😊"]))
             return
 
         if event.is_private:
+            logger.info(f"💬 Обработка сообщения в ЛС: {event.text[:30]}...")
             async with client.action(event.chat_id, 'typing'):
                 response = await ask_karina(event.text, chat_id=event.chat_id)
+                logger.info(f"💬 Ответ: {response[:50] if response else 'None'}...")
                 await event.reply(response)
+        else:
+            logger.info(f"⚠️ Пропуск (не личный чат)")
