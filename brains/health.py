@@ -12,25 +12,27 @@ async def save_health_record(confirmed: bool, timestamp: datetime = None):
     """Сохраняет запись о здоровье (укол) в Supabase"""
     if not timestamp:
         timestamp = datetime.now(timezone.utc)
-    
+
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
         "Prefer": "return=minimal"
     }
-    
+
     payload = {
         "user_id": MY_ID,
         "confirmed": confirmed,
         "timestamp": timestamp.isoformat(),
         "date": timestamp.strftime('%Y-%m-%d'),
-        "time": timestamp.strftime('%H:%M')
+        "time": timestamp.strftime('%H:%M:%S')
     }
-    
+
     try:
         async with httpx.AsyncClient() as client:
+            logger.info(f"💾 Сохранение записи: {payload}")
             response = await client.post(SUPABASE_REST_URL, json=payload, headers=headers)
+            logger.info(f"📊 Supabase ответ: {response.status_code}")
             if response.status_code in [201, 204, 200]:
                 logger.info(f"✅ Здоровье: запись сохранена ({confirmed})")
                 return True
@@ -65,10 +67,13 @@ async def get_health_stats(days: int = 7) -> dict:
     
     try:
         async with httpx.AsyncClient() as client:
-            # Запрос с фильтрацией по дате
-            url = f"{SUPABASE_REST_URL}?date=gt.{start_date}&order=date.desc"
+            # Запрос с фильтрацией по дате (Supabase REST API syntax)
+            url = f"{SUPABASE_REST_URL}?date=gte.{start_date}&order=date.desc"
+            logger.info(f"🔍 Запрос к Supabase: {url}")
             response = await client.get(url, headers=headers)
             
+            logger.info(f"📊 Supabase ответ: {response.status_code}")
+
             if response.status_code == 200:
                 records = response.json()
                 
