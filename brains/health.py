@@ -47,7 +47,7 @@ async def save_health_record(confirmed: bool, timestamp: datetime = None):
 async def get_health_stats(days: int = 7) -> dict:
     """
     Получает статистику по здоровью за последние N дней
-    
+
     Returns:
         dict: {
             "total_days": int,
@@ -59,12 +59,13 @@ async def get_health_stats(days: int = 7) -> dict:
     """
     headers = {
         "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}"
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Prefer": "count=none"  # Важно для Supabase REST API
     }
-    
+
     # Получаем записи за последние N дней
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime('%Y-%m-%d')
-    
+
     try:
         async with httpx.AsyncClient() as client:
             # Запрос с фильтрацией по дате (Supabase REST API syntax)
@@ -73,6 +74,7 @@ async def get_health_stats(days: int = 7) -> dict:
             response = await client.get(url, headers=headers)
             
             logger.info(f"📊 Supabase ответ: {response.status_code}")
+            logger.info(f"📄 Тело ответа: {response.text[:500]}")
 
             if response.status_code == 200:
                 records = response.json()
