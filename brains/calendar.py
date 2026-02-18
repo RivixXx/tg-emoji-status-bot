@@ -247,3 +247,51 @@ async def get_conflict_report() -> str:
     report.append("\n💡 **Совет:** Проверь, сможешь ли ты присутствовать на обеих встречах, или перенеси одну из них.")
     
     return "\n".join(report)
+
+
+async def get_upcoming_events_detailed(max_results=10):
+    """Возвращает события с полными данными для напоминаний"""
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat().replace('+00:00', 'Z')
+    
+    service = get_calendar_service()
+    if not service:
+        return []
+    
+    try:
+        calendar_list = service.calendarList().list().execute()
+        calendars = calendar_list.get('items', [])
+        
+        if not calendars:
+            return []
+        
+        all_events = []
+        for entry in calendars:
+            cal_id = entry['id']
+            
+            try:
+                events_result = service.events().list(
+                    calendarId=cal_id, timeMin=now_iso,
+                    maxResults=max_results, singleEvents=True,
+                    orderBy='startTime'
+                ).execute()
+                
+                for event in events_result.get('items', []):
+                    start = event['start'].get('dateTime', event['start'].get('date'))
+                    start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+                    
+                    all_events.append({
+                        'summary': event['summary'],
+                        'start_dt': start_dt,
+                        'calendar': cal_id,
+                        'description': event.get('description', '')
+                    })
+            except Exception as e:
+                logger.error(f"Ошибка получения событий: {e}")
+                continue
+        
+        return all_events[:max_results]
+        
+    except Exception as e:
+        logger.error(f"Error getting detailed events: {e}")
+        return []

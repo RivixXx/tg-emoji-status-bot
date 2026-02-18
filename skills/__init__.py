@@ -9,7 +9,10 @@ from brains.memory import save_memory
 from brains.calendar import get_upcoming_events, add_calendar, get_conflict_report
 from brains.health import get_health_report_text, save_health_record
 from brains.stt import transcribe_voice
+from brains.reminders import reminder_manager, ReminderType
 from auras import confirm_health
+
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +71,13 @@ def register_karina_base_skills(client):
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
-        """Интеллектуальное общение (текст + голос)"""
+        """Интеллектуальное общение (текст + голос) + Обработка напоминаний"""
         logger.info(f"📩 Сообщение от {event.chat_id}: {event.text[:50] if event.text else 'no text'}")
         
         # Если пришло голосовое сообщение
         if event.voice or event.audio:
             logger.info(f"🎤 Голосовое сообщение от {event.chat_id}")
-            if not event.is_private: 
+            if not event.is_private:
                 logger.info("⚠️ Пропуск (не личный чат)")
                 return
 
@@ -90,10 +93,42 @@ def register_karina_base_skills(client):
                 event.text = text
                 logger.info(f"🎤 Голос расшифрован: {text}")
 
-        if not event.text or event.text.startswith('/'): 
+        if not event.text or event.text.startswith('/'):
             logger.info(f"⚠️ Пропуск (нет текста или команда)")
             return
 
+        # 🔔 ПРОВЕРКА НАПОМИНАНИЙ
+        
+        # 1. Подтверждение здоровья
+        if reminder_manager.is_health_confirmation(event.text):
+            logger.info(f"✅ Подтверждение здоровья от {event.chat_id}")
+            reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
+            await confirm_health()
+            await event.respond(random.choice([
+                "Умничка! 🥰",
+                "Так держать! 👍",
+                "Я спокойна. 😊",
+                "Молодец! ❤️"
+            ]))
+            return
+        
+        # 2. Отсрочка напоминания
+        if reminder_manager.is_snooze_request(event.text):
+            minutes = reminder_manager.parse_snooze_command(event.text)
+            if minutes:
+                # Ищем активное напоминание
+                for rid, reminder in reminder_manager.reminders.items():
+                    if reminder.is_active and not reminder.is_confirmed:
+                        reminder_manager.snooze_reminder(rid, minutes)
+                        await event.respond(f"⏰ Хорошо, напомню через {minutes} мин!")
+                        return
+        
+        # 3. Пропуск напоминания
+        if reminder_manager.is_skip_request(event.text):
+            logger.info(f"⏭️ Пропуск напоминания от {event.chat_id}")
+            await event.respond("Хорошо, пропускаем. Но я ещё напомню! 😉")
+            return
+        
         # Детектор подтверждения здоровья (высокий приоритет)
         text_low = event.text.lower()
         if any(word in text_low for word in ['сделал', 'готово', 'окей', 'уколол']):

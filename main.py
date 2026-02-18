@@ -16,6 +16,7 @@ from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION
 from brains.memory import search_memories
 from brains.calendar import get_upcoming_events, get_conflict_report
 from brains.health import get_health_report_text, get_health_stats
+from brains.reminders import reminder_manager, start_reminder_loop
 from brains.emotions import get_emotion_state, set_emotion
 from brains.news import get_latest_news
 from brains.ai import ask_karina
@@ -175,7 +176,7 @@ def run_bot_thread():
 def run_userbot_thread():
     """Запуск UserBot в отдельном потоке"""
     logger.info("👤 Запуск UserBot (поток)...")
-    
+
     async def userbot_main():
         await user_client.connect()
         if not await user_client.is_user_authorized():
@@ -183,11 +184,31 @@ def run_userbot_thread():
             return
         logger.info("✅ UserBot авторизован")
         
-        # Запускаем ауры в том же потоке что и UserBot
-        asyncio.create_task(start_auras(user_client, bot_client))
+        # Инициализируем reminder_manager
+        from brains.config import MY_ID
+        reminder_manager.set_client(user_client, MY_ID)
         
+        # Создаём ежедневные напоминания
+        health_reminder = reminder_manager.create_health_reminder("22:00")
+        reminder_manager.reminders[health_reminder.id] = health_reminder
+        
+        lunch_reminder = reminder_manager.create_lunch_reminder()
+        reminder_manager.reminders[lunch_reminder.id] = lunch_reminder
+        
+        morning_greeting = reminder_manager.create_morning_greeting()
+        reminder_manager.reminders[morning_greeting.id] = morning_greeting
+        
+        evening_reminder = reminder_manager.create_evening_reminder("22:30")
+        reminder_manager.reminders[evening_reminder.id] = evening_reminder
+        
+        logger.info("🔔 Напоминания созданы")
+
+        # Запускаем ауры и цикл напоминаний в том же потоке
+        asyncio.create_task(start_auras(user_client, bot_client))
+        asyncio.create_task(start_reminder_loop())
+
         await user_client.run_until_disconnected()
-    
+
     # Создаём новый event loop для потока
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
