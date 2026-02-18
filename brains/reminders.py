@@ -4,6 +4,7 @@
 - Встречи (календарь)
 - Перерывы/обед
 - Утренние/вечерние ритуалы
+- Креативная генерация через AI
 """
 import asyncio
 import logging
@@ -12,6 +13,9 @@ from typing import Dict, List, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 import random
+
+from telethon import types
+from brains.reminder_generator import get_or_generate_reminder
 
 logger = logging.getLogger(__name__)
 
@@ -148,23 +152,85 @@ class ReminderManager:
         self.my_id = my_id
     
     async def send_reminder(self, reminder: Reminder):
-        """Отправляет напоминание пользователю"""
+        """Отправляет напоминание пользователю (с AI генерацией + кнопки)"""
         if not self.client or not self.my_id:
             logger.error("❌ Клиент или my_id не установлен!")
             return
         
-        message = reminder.get_escalation_message(reminder.current_level)
+        # 🎯 Генерируем креативное напоминание через AI
+        ai_message = await get_or_generate_reminder(
+            reminder_id=reminder.id,
+            reminder_type=reminder.type.value,
+            escalation_level=reminder.current_level.value,
+            context=reminder.context,
+            time_str=reminder.context.get("time"),
+            force_new=False
+        )
         
-        # Подставляем контекст в сообщение
-        if reminder.context:
-            for key, value in reminder.context.items():
-                message = message.replace(f"{{{key}}}", str(value))
+        # Если AI не сработал — используем заготовку
+        if not ai_message:
+            message = reminder.get_escalation_message(reminder.current_level)
+            if reminder.context:
+                for key, value in reminder.context.items():
+                    message = message.replace(f"{{{key}}}", str(value))
+        else:
+            message = ai_message
+        
+        # 🔘 Добавляем интерактивные кнопки
+        buttons = await self._create_reminder_buttons(reminder)
         
         try:
-            await self.client.send_message(self.my_id, message)
+            await self.client.send_message(self.my_id, message, buttons=buttons)
             logger.info(f"🔔 Напоминание отправлено: {reminder.id} ({reminder.current_level.value})")
         except Exception as e:
             logger.error(f"❌ Ошибка отправки напоминания: {e}")
+    
+    async def _create_reminder_buttons(self, reminder: Reminder):
+        """Создаёт интерактивные кнопки для напоминания"""
+        
+        # Кнопки для здоровья (укол)
+        if reminder.type == ReminderType.HEALTH:
+            return [
+                [types.KeyboardButton("✅ Сделал!", data=b"confirm_health")],
+                [
+                    types.KeyboardButton("⏰ 15 мин", data=b"snooze_15"),
+                    types.KeyboardButton("⏰ 30 мин", data=b"snooze_30")
+                ],
+                [types.KeyboardButton("❌ Пропустить", data=b"skip_health")]
+            ]
+        
+        # Кнопки для встреч
+        elif reminder.type == ReminderType.MEETING:
+            return [
+                [types.KeyboardButton("👍 Готов!", data=b"confirm_meeting")],
+                [types.KeyboardButton("⏰ 5 мин", data=b"snooze_5")]
+            ]
+        
+        # Кнопки для обеда
+        elif reminder.type == ReminderType.LUNCH:
+            return [
+                [types.KeyboardButton("🍽 Иду обедать!", data=b"confirm_lunch")],
+                [types.KeyboardButton("⏰ Позже", data=b"snooze_30")]
+            ]
+        
+        # Кнопки для перерыва
+        elif reminder.type == ReminderType.BREAK:
+            return [
+                [types.KeyboardButton("🧘 Отдыхаю!", data=b"confirm_break")],
+                [types.KeyboardButton("⏰ 10 мин", data=b"snooze_10")]
+            ]
+        
+        # Кнопки для утреннего/вечернего
+        elif reminder.type in [ReminderType.MORNING, ReminderType.EVENING]:
+            return [
+                [types.KeyboardButton("😊 Спасибо!", data=b"acknowledge")]
+            ]
+        
+        # По умолчанию
+        return [
+            [types.KeyboardButton("👌 Понял", data=b"acknowledge")],
+            [types.KeyboardButton("⏰ Позже", data=b"snooze_30")]
+        ]
     
     async def start_escalation(self, reminder: Reminder):
         """Запускает эскалацию напоминания"""

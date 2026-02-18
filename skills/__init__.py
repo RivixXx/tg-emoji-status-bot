@@ -10,6 +10,7 @@ from brains.calendar import get_upcoming_events, add_calendar, get_conflict_repo
 from brains.health import get_health_report_text, save_health_record
 from brains.stt import transcribe_voice
 from brains.reminders import reminder_manager, ReminderType
+from brains.reminder_generator import clear_cache
 from auras import confirm_health
 
 from datetime import datetime, timedelta
@@ -26,6 +27,65 @@ def register_discovery_skills(client):
                     return
 
 def register_karina_base_skills(client):
+    # Обработчик callback_query (кнопки напоминаний)
+    @client.on(events.CallbackQuery())
+    async def reminder_callback_handler(event):
+        """Обработка нажатий на кнопки напоминаний"""
+        data = event.data.decode('utf-8') if isinstance(event.data, bytes) else event.data
+        logger.info(f"🔘 Callback: {data} от {event.chat_id}")
+        
+        # Подтверждение здоровья
+        if data == "confirm_health":
+            reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
+            await confirm_health()
+            await event.answer("✅ Умничка! Я горжусь тобой! ❤️", alert=True)
+            await event.edit(f"{event.message.text}\n\n✅ Подтверждено!")
+            return
+        
+        # Отсрочка (snooze)
+        if data.startswith("snooze_"):
+            minutes = int(data.split("_")[1])
+            # Ищем активное напоминание
+            for rid, reminder in reminder_manager.reminders.items():
+                if reminder.is_active and not reminder.is_confirmed:
+                    reminder_manager.snooze_reminder(rid, minutes)
+                    await event.answer(f"⏰ Напомню через {minutes} мин!", alert=True)
+                    await event.edit(f"{event.message.text}\n\n⏰ Отложено на {minutes} мин.")
+                    return
+        
+        # Пропуск
+        if data == "skip_health":
+            await event.answer("Хорошо, но я ещё напомню! 😉", alert=True)
+            await event.edit(f"{event.message.text}\n\n⏭️ Пропущено.")
+            return
+        
+        # Подтверждение встречи
+        if data == "confirm_meeting":
+            await event.answer("👍 Отлично! Ты готов! 🚀", alert=True)
+            await event.edit(f"{event.message.text}\n\n👍 Готов!")
+            return
+        
+        # Подтверждение обеда
+        if data == "confirm_lunch":
+            await event.answer("🍽 Приятного аппетита! 🥗", alert=True)
+            await event.edit(f"{event.message.text}\n\n🍽 Приятного!")
+            return
+        
+        # Подтверждение перерыва
+        if data == "confirm_break":
+            await event.answer("🧘 Отлично! Отдыхай! 😊", alert=True)
+            await event.edit(f"{event.message.text}\n\n🧘 Отдыхай!")
+            return
+        
+        # Просто подтверждение (acknowledge)
+        if data == "acknowledge":
+            await event.answer("😊 Рада что ты со мной! 💕", alert=False)
+            await event.edit(f"{event.message.text}\n\n😊 💕")
+            return
+        
+        # По умолчанию
+        await event.answer("👌 Ок!", alert=False)
+
     @client.on(events.NewMessage(pattern='/start'))
     async def start_handler(event):
         logger.info(f"📩 /start от пользователя {event.chat_id}")
@@ -68,6 +128,12 @@ def register_karina_base_skills(client):
         logger.info(f"📩 /news от пользователя {event.chat_id}")
         news = await get_latest_news()
         await event.respond(f"🗞 **Новости:**\n\n{news}")
+    
+    @client.on(events.NewMessage(pattern='/clearrc'))
+    async def clear_cache_handler(event):
+        """Очистить кэш напоминаний (для тестирования)"""
+        clear_cache()
+        await event.respond("🧹 Кэш напоминаний очищен! Теперь все напоминания будут уникальными! ✨")
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
