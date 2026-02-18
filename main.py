@@ -29,6 +29,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 🛡️ Фильтрация шумных предупреждений Telethon
+logging.getLogger('telethon.network.mtproto').setLevel(logging.ERROR)
+logging.getLogger('telethon.extensions.messages').setLevel(logging.ERROR)
+
 # ========== ВЕБ-СЕРВЕР ==========
 
 app = Quart(__name__, static_folder='static', static_url_path='')
