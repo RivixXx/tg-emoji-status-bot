@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # PostgreSQL с pgvector для RAG
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: karina-postgres
+    environment:
+      POSTGRES_DB: karina_db
+      POSTGRES_USER: karina_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-karina_secure_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U karina_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ollama для локальной LLM
+  ollama:
+    image: ollama/ollama:latest
+    container_name: karina-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+    # Для GPU NVIDIA раскомментируй:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Karina Bot
+  karina-bot:
+    build: .
+    container_name: karina-bot
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://karina_user:${POSTGRES_PASSWORD:-karina_secure_password}@postgres:5432/karina_db
+      - OLLAMA_URL=http://ollama:11434
+      - SUPABASE_URL=http://postgres:5432
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
+    driver: local
+  ollama_data:
+    driver: local
