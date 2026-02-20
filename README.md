@@ -35,6 +35,14 @@
 - **Health Dashboard** — графики подтвержденных уколов и статистика
 - **Фон Карины** — персонализированный интерфейс
 
+### 🔔 Умные напоминания
+- **Здоровье**: Ежедневные напоминания об уколе (22:00) с эскалацией
+- **Встречи**: Напоминания за 15 минут до встречи из календаря
+- **Обед**: Напоминание в 13:00
+- **Утро/Вечер**: Приветствия и напоминания об отдыхе
+- **Интерактивные кнопки**: Подтверждение, отсрочка, пропуск
+- **AI-генерация**: Каждое напоминание уникальное и креативное
+
 ---
 
 ## 🏆 MVP Статус
@@ -51,6 +59,9 @@
 - [x] Эмоциональный движок (цветовые темы)
 - [x] Health Dashboard (статистика уколов)
 - [x] Детектор конфликтов календаря
+- [x] Умные напоминания с AI-генерацией
+- [x] Интерактивные кнопки для напоминаний
+- [x] Домашний сервер (Ubuntu) для развёртывания
 
 ### 🚀 В разработке
 - [ ] 3D Аватар в Mini App
@@ -69,9 +80,9 @@
 | **AI** | Mistral AI API (Embeddings & Chat) |
 | **Database** | Supabase (PostgreSQL + pgvector) |
 | **Calendar** | Google Calendar API |
-| **Voice** | Hugging Face Whisper |
+| **Voice** | Hugging Face Whisper (STT) |
 | **Frontend** | React + Tailwind CSS (Mini App) |
-| **Hosting** | Railway |
+| **Hosting** | Railway / Домашний сервер (Ubuntu) |
 
 ---
 
@@ -89,6 +100,8 @@ tg-emoji-status-bot/
 │   ├── health.py       # Health statistics
 │   ├── memory.py       # RAG memory (Supabase)
 │   ├── news.py         # RSS Habr parser
+│   ├── reminders.py    # Reminder system
+│   ├── reminder_generator.py  # AI reminder generation
 │   ├── stt.py          # Speech-to-text (Whisper)
 │   └── weather.py      # OpenWeatherMap
 ├── auras/              # Automated background tasks
@@ -99,89 +112,55 @@ tg-emoji-status-bot/
 ├── static/             # Mini App frontend
 │   ├── index.html      # React SPA (bubble UI)
 │   └── karina.jpg      # Background image
+├── .env.example        # Environment template
+├── .gitignore          # Git ignore rules
 ├── requirements.txt    # Python dependencies
 ├── Procfile           # Railway deployment config
+├── docker-compose.yml # Docker setup
+├── Dockerfile         # Docker image
 ├── ROADMAP.md         # Future development
 ├── MVP_DONE.md        # Completed features
+├── DEPLOY_HOME.md     # Home server deployment guide
 └── SYSTEM_PROMPT.md   # Karina's personality doc
 ```
 
 ---
 
-## 🚀 Как запустить у себя
+## 🚀 Как запустить
 
-### 1. Склонируй репозиторий
-```bash
-git clone https://github.com/your-username/tg-emoji-status-bot.git
-cd tg-emoji-status-bot
-```
-
-### 2. Получи API-ключи
-
-#### Telegram (Bot + UserBot)
-1. **Bot Token**: @BotFather → `/newbot` → скопируй токен
-2. **API ID/Hash**: https://my.telegram.org → API development tools
-3. **SESSION_STRING**: Запусти скрипт генерации сессии
-
-#### Mistral AI
-- https://console.mistral.ai → API Keys
-
-#### Supabase
-- https://supabase.com → создай проект → получи URL и ключ
-
-#### Google Calendar
-- https://console.cloud.google.com → Service Account → JSON ключ
-
-#### OpenWeatherMap (опционально)
-- https://openweathermap.org → API Key
-
-### 3. Настрой переменные окружения
-
-Создай `.env` файл или настрой в Railway Variables:
-
-```bash
-# Telegram
-API_ID=12345678
-API_HASH=your_api_hash
-SESSION_STRING=your_session_string
-KARINA_BOT_TOKEN=your_bot_token
-
-# AI
-MISTRAL_API_KEY=your_mistral_key
-
-# Database
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_supabase_key
-
-# Calendar
-GOOGLE_CALENDAR_CREDENTIALS={"type":"service_account",...}
-
-# Voice (optional)
-HF_TOKEN=your_huggingface_token
-
-# Weather (optional)
-WEATHER_API_KEY=your_openweathermap_key
-WEATHER_CITY=Moscow
-
-# User IDs
-MY_TELEGRAM_ID=your_user_id
-TARGET_USER_ID=target_user_id
-```
-
-### 4. Запусти локально
-
-```bash
-pip install -r requirements.txt
-python main.py
-```
-
-### 5. Deploy на Railway
+### Вариант 1: Railway (облако)
 
 1. Зайди на https://railway.app
 2. New Project → Deploy from GitHub repo
-3. Выбери свой репозиторий
-4. Добавь все переменные окружения в Variables
-5. Дождись сборки (1–3 минуты)
+3. Добавь переменные окружения из `.env.example`
+4. Дождись сборки (1–3 минуты)
+
+### Вариант 2: Домашний сервер (Ubuntu 22.04)
+
+См. [`DEPLOY_HOME.md`](DEPLOY_HOME.md) — полная инструкция.
+
+**Кратко:**
+
+```bash
+# Клонирование
+git clone https://github.com/your-username/tg-emoji-status-bot.git
+cd tg-emoji-status-bot
+
+# Виртуальное окружение
+python3 -m venv karina
+source karina/bin/activate
+
+# Зависимости
+pip install -r requirements.txt
+
+# Переменные окружения
+cp .env.example .env
+nano .env  # Заполни своими данными
+
+# Запуск
+set -a && source .env && set +a
+python main.py
+```
 
 ---
 
@@ -194,7 +173,7 @@ python main.py
 ## 🔧 Если что-то не работает
 
 ### "Бот не отвечает"
-- Проверь логи на Railway
+- Проверь логи: `tail -f bot.log`
 - Убедись что `KARINA_BOT_TOKEN` правильный
 - Проверь Privacy Mode в @BotFather (должен быть Disabled)
 
@@ -207,6 +186,9 @@ python main.py
 ### "Mistral API 429 Error"
 - Встроена retry-логика, подожди немного
 
+### "Supabase 401 Unauthorized"
+- Проверь `SUPABASE_KEY` (используй `service_role` key)
+
 ### "PersistentTimestampOutdatedError"
 - Встроена авто-переподключение к Telegram
 
@@ -214,7 +196,17 @@ python main.py
 
 ## 📊 Логи
 
-Логи выводятся в stdout и доступны в Railway Dashboard → Deployments → Logs.
+### На Railway:
+Dashboard → Deployments → Logs
+
+### На домашнем сервере:
+```bash
+# В фоне
+tail -f bot.log
+
+# Через journalctl (если systemd)
+journalctl -u karina-bot -f
+```
 
 Формат логов:
 ```
@@ -222,6 +214,7 @@ python main.py
 💬 Сообщение от 123456...  ← Входящие сообщения
 🧠 Память: Найдено 3 фактов ← RAG поиск
 ✨ Аура: статус изменен на sleep ← Смена статуса
+🔔 Напоминание отправлено: health_20260218 ← Напоминание
 ```
 
 ---
@@ -239,9 +232,44 @@ python main.py
 | `/weather` | Прогноз погоды 🌤 |
 | `/remember` | Запомнить факт ✍️ |
 | `/link_email` | Привязать Google Календарь 📧 |
+| `/clearrc` | Очистить кэш напоминаний 🧹 |
 
 ---
 
-Готово! Теперь статус меняется сам, Карина отвечает на сообщения и заботится о здоровье! 🌟
+## 🔄 Рабочий процесс разработки
+
+### На ПК (Windows):
+```bash
+# Разработка
+# Редактируй файлы...
+
+# Деплой
+git add .
+git commit -m "feat: новое улучшение"
+git push
+
+# Быстрый деплой (если настроены алиасы)
+deploy
+```
+
+### На сервере (Ubuntu):
+```bash
+# Ручной деплой
+~/deploy.sh
+
+# Просмотр логов
+tail -f ~/tg-emoji-status-bot/bot.log
+
+# Статус бота
+ps aux | grep python
+
+# Перезапуск
+pkill -f "python main.py"
+~/deploy.sh
+```
+
+---
+
+Готово! Теперь статус меняется сам, Карина отвечает на сообщения, заботится о здоровье и напоминает о важном! 🌟
 # Test
 # Test deploy
