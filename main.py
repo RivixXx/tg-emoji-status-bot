@@ -256,10 +256,10 @@ async def run_userbot_main():
             reminder_manager.reminders[r.id] = r
             logger.info(f"🔔 Создано напоминание: {r.id}")
 
-    ensure_reminder(reminder_manager.ReminderType.HEALTH, reminder_manager.create_health_reminder, "22:00")
-    ensure_reminder(reminder_manager.ReminderType.LUNCH, reminder_manager.create_lunch_reminder)
-    ensure_reminder(reminder_manager.ReminderType.MORNING, reminder_manager.create_morning_greeting)
-    ensure_reminder(reminder_manager.ReminderType.EVENING, reminder_manager.create_evening_reminder, "22:30")
+    ensure_reminder(ReminderType.HEALTH, reminder_manager.create_health_reminder, "22:00")
+    ensure_reminder(ReminderType.LUNCH, reminder_manager.create_lunch_reminder)
+    ensure_reminder(ReminderType.MORNING, reminder_manager.create_morning_greeting)
+    ensure_reminder(ReminderType.EVENING, reminder_manager.create_evening_reminder, "22:30")
 
     # Запуск фоновых задач
     aura_task = asyncio.create_task(start_auras(user_client, bot_client))
