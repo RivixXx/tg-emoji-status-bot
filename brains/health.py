@@ -11,7 +11,10 @@ SUPABASE_REST_URL = f"{SUPABASE_URL}/rest/v1/health_records"
 async def save_health_record(confirmed: bool, timestamp: datetime = None):
     """Сохраняет запись о здоровье (укол) в Supabase"""
     if not timestamp:
-        timestamp = datetime.now(timezone.utc)
+        # Используем локальное время для сохранения даты/времени, 
+        # но сохраняем UTC timestamp для точности
+        moscow_tz = timezone(timedelta(hours=3))
+        timestamp = datetime.now(moscow_tz)
 
     headers = {
         "apikey": SUPABASE_KEY,
@@ -30,14 +33,13 @@ async def save_health_record(confirmed: bool, timestamp: datetime = None):
 
     try:
         async with httpx.AsyncClient() as client:
-            logger.info(f"💾 Сохранение записи: {payload}")
+            logger.info(f"💾 Сохранение здоровья для ID {MY_ID}: {timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
             response = await client.post(SUPABASE_REST_URL, json=payload, headers=headers)
-            logger.info(f"📊 Supabase ответ: {response.status_code}")
             if response.status_code in [201, 204, 200]:
-                logger.info(f"✅ Здоровье: запись сохранена ({confirmed})")
+                logger.info(f"✅ Здоровье: запись сохранена")
                 return True
             else:
-                logger.error(f"Supabase Health Error: {response.status_code} - {response.text[:200]}")
+                logger.error(f"Supabase Save Error: {response.status_code} - {response.text}")
                 return False
     except Exception as e:
         logger.error(f"Save health record failed: {e}")
@@ -45,137 +47,91 @@ async def save_health_record(confirmed: bool, timestamp: datetime = None):
 
 
 async def get_health_stats(days: int = 7) -> dict:
-    """
-    Получает статистику по здоровью за последние N дней
-
-    Returns:
-        dict: {
-            "total_days": int,
-            "confirmed_days": int,
-            "missed_days": int,
-            "success_rate": float,
-            "daily_stats": [{"date": str, "confirmed": bool, "time": str}]
-        }
-    """
+    """Получает статистику по здоровью за последние N дней для текущего пользователя"""
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Prefer": "count=none"  # Важно для Supabase REST API
+        "Prefer": "count=none"
     }
 
-    # Получаем записи за последние N дней
-    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime('%Y-%m-%d')
+    # Считаем дату начала (7 дней назад)
+    start_date = (datetime.now(timezone(timedelta(hours=3))) - timedelta(days=days)).strftime('%Y-%m-%d')
 
     try:
         async with httpx.AsyncClient() as client:
-            # Запрос с фильтрацией по дате (Supabase REST API syntax)
-            url = f"{SUPABASE_REST_URL}?date=gte.{start_date}&order=date.desc"
-            logger.info(f"🔍 Запрос к Supabase: {url}")
+            # 🔍 Фильтруем по user_id и дате, сортируем по timestamp
+            url = f"{SUPABASE_REST_URL}?user_id=eq.{MY_ID}&date=gte.{start_date}&order=timestamp.desc"
+            logger.info(f"🔍 Запрос статистики для {MY_ID} с {start_date}")
             response = await client.get(url, headers=headers)
             
-            logger.info(f"📊 Supabase ответ: {response.status_code}")
-            logger.info(f"📄 Тело ответа: {response.text[:500]}")
-
             if response.status_code == 200:
                 records = response.json()
                 
                 if not records:
                     return {
-                        "total_days": 0,
-                        "confirmed_days": 0,
-                        "missed_days": 0,
-                        "success_rate": 0,
-                        "daily_stats": [],
-                        "message": "Нет данных за указанный период"
+                        "total_days": 0, "confirmed_days": 0, "missed_days": 0,
+                        "success_rate": 0, "daily_stats": [],
+                        "message": "Нет данных"
                     }
                 
-                # Группируем по датам
+                # Группируем по датам (берем самую свежую запись за день)
                 daily_data = {}
                 for record in records:
-                    date = record.get('date', 'unknown')
-                    if date not in daily_data:
+                    date = record.get('date')
+                    if date and date not in daily_data:
                         daily_data[date] = {
                             "date": date,
                             "confirmed": record.get('confirmed', False),
                             "time": record.get('time', 'N/A')
                         }
                 
-                # Преобразуем в список
-                daily_stats = list(daily_data.values())
-                daily_stats.sort(key=lambda x: x['date'], reverse=True)
+                # Сортируем результат по дате
+                daily_stats = sorted(daily_data.values(), key=lambda x: x['date'], reverse=True)
                 
-                # Считаем статистику
-                total_days = len(daily_stats)
                 confirmed_days = sum(1 for d in daily_stats if d['confirmed'])
-                missed_days = total_days - confirmed_days
-                success_rate = round((confirmed_days / total_days * 100) if total_days > 0 else 0, 1)
+                total_days = len(daily_stats)
                 
                 return {
                     "total_days": total_days,
                     "confirmed_days": confirmed_days,
-                    "missed_days": missed_days,
-                    "success_rate": success_rate,
+                    "missed_days": total_days - confirmed_days,
+                    "success_rate": round((confirmed_days / total_days * 100) if total_days > 0 else 0, 1),
                     "daily_stats": daily_stats
                 }
             else:
-                logger.error(f"Supabase Health Stats Error: {response.status_code}")
-                return {
-                    "total_days": 0,
-                    "confirmed_days": 0,
-                    "missed_days": 0,
-                    "success_rate": 0,
-                    "daily_stats": [],
-                    "error": f"HTTP {response.status_code}"
-                }
+                logger.error(f"Supabase Stats Error: {response.status_code}")
+                return {"error": f"HTTP {response.status_code}", "daily_stats": []}
     except Exception as e:
-        logger.error(f"Get health stats failed: {e}")
-        return {
-            "total_days": 0,
-            "confirmed_days": 0,
-            "missed_days": 0,
-            "success_rate": 0,
-            "daily_stats": [],
-            "error": str(e)
-        }
+        logger.error(f"Get stats failed: {e}")
+        return {"error": str(e), "daily_stats": []}
 
 
 async def get_health_report_text(days: int = 7) -> str:
-    """
-    Возвращает текстовый отчёт о здоровье
-    
-    Returns:
-        str: Форматированный отчёт
-    """
+    """Форматирует отчет для Telegram"""
     stats = await get_health_stats(days)
     
-    if stats.get("error"):
+    if "error" in stats:
         return f"❌ Ошибка получения статистики: {stats['error']}"
     
-    if stats["total_days"] == 0:
-        return "📊 Нет данных о здоровье за этот период. Начни отмечать уколы!"
+    if not stats.get("daily_stats"):
+        return "📊 Нет данных за последние 7 дней. Напиши 'сделал', когда уколешься! ❤️"
     
-    # Формируем отчёт
     lines = [
         "📊 **Статистика здоровья**\n",
         f"📅 Период: {stats['total_days']} дн.",
         f"✅ Подтверждено: {stats['confirmed_days']}",
         f"❌ Пропущено: {stats['missed_days']}",
-        f"📈 Успешность: {stats['success_rate']}%\n"
+        f"📈 Успешность: {stats['success_rate']}%\n",
+        "**Последние записи:**"
     ]
     
-    # Добавляем последние записи
-    if stats['daily_stats']:
-        lines.append("**Последние записи:**")
-        for day in stats['daily_stats'][:5]:
-            status = "✅" if day['confirmed'] else "❌"
-            lines.append(f"{status} {day['date']} в {day['time']}")
+    for day in stats['daily_stats'][:5]:
+        status = "✅" if day['confirmed'] else "❌"
+        lines.append(f"{status} {day['date']} в {day['time']}")
     
-    # Мотивация
     if stats['success_rate'] >= 90:
-        lines.append("\n🏆 Отличный результат! Так держать! 💪")
-    elif stats['success_rate'] >= 70:
-        lines.append("\n👍 Хороший результат, но можно лучше! 😊")
+        lines.append("\n🏆 Результат супер! Так держать! 💪")
     else:
-        lines.append("\n💡 Нужно быть внимательнее к здоровью! ❤️")
+        lines.append("\n💡 Помни, здоровье — это главное! ❤️")
     
     return "\n".join(lines)

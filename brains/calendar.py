@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import ast
 from datetime import datetime, timedelta, timezone
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
-# Кэш для календаря: {timestamp: (events_text, expire_at)}
+# Кэш для календаря
 _calendar_cache = {
     "events": None,
     "expire_at": None
@@ -23,12 +24,27 @@ def get_calendar_service():
     if not GOOGLE_CALENDAR_CREDENTIALS:
         logger.error("GOOGLE_CALENDAR_CREDENTIALS not set!")
         return None
+    
     try:
-        creds_dict = json.loads(GOOGLE_CALENDAR_CREDENTIALS)
+        # Очищаем строку от возможных артефактов (внешние кавычки, пробелы)
+        creds_raw = GOOGLE_CALENDAR_CREDENTIALS.strip()
+        if (creds_raw.startswith("'") and creds_raw.endswith("'")) or \
+           (creds_raw.startswith('"') and creds_raw.endswith('"')):
+            creds_raw = creds_raw[1:-1]
+
+        try:
+            # Сначала пробуем стандартный JSON
+            creds_dict = json.loads(creds_raw)
+        except json.JSONDecodeError:
+            # Если не вышло (например, одинарные кавычки), пробуем через ast
+            logger.warning("⚠️ GOOGLE_CALENDAR_CREDENTIALS is not a valid JSON, trying literal_eval...")
+            creds_dict = ast.literal_eval(creds_raw)
+
         creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         return build('calendar', 'v3', credentials=creds, static_discovery=False)
     except Exception as e:
-        logger.error(f"Error connecting to Google Calendar: {e}")
+        logger.error(f"❌ Error connecting to Google Calendar: {e}")
+        logger.error("Check if GOOGLE_CALENDAR_CREDENTIALS contains a valid JSON/dict string.")
         return None
 
 async def add_calendar(calendar_id):
