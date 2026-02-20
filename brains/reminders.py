@@ -20,6 +20,9 @@ import random
 from telethon import types
 from brains.reminder_generator import get_or_generate_reminder
 from brains.config import SUPABASE_URL, SUPABASE_KEY
+from brains.weather import get_weather
+from brains.news import get_latest_news
+from brains.calendar import get_upcoming_events
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +168,19 @@ class ReminderManager:
         )
         
         message = ai_message or reminder.get_escalation_message(reminder.current_level)
+        
+        # 🌅 Утренний брифинг (автоматически добавляем новости и погоду)
+        if reminder.type == ReminderType.MORNING:
+            logger.info("☕️ Формирование утреннего брифинга...")
+            weather = await get_weather()
+            news = await get_latest_news(limit=3)
+            events = await get_upcoming_events(max_results=5)
+            
+            briefing = f"\n\n🌤 **Погода:** {weather if weather else 'не удалось узнать'}"
+            briefing += f"\n\n🗓 **Планы на сегодня:**\n{events}"
+            briefing += f"\n\n{news}"
+            message += briefing
+
         buttons = await self._create_reminder_buttons(reminder)
         
         try:
