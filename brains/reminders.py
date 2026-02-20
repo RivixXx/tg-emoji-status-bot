@@ -298,8 +298,15 @@ class ReminderManager:
         return None
 
     def is_health_confirmation(self, text: str) -> bool:
+        """Проверяет подтверждение здоровья с использованием границ слов"""
         text_lower = text.lower()
-        return any(word in text_lower for word in ['сделал', 'готово', 'окей', 'уколол', 'подтверждаю', 'да', 'ок', 'yes', 'done'])
+        import re
+        # Ищем слова только целиком, чтобы не ловить 'да' в 'погода'
+        confirm_patterns = [
+            r'\bсделал\b', r'\bготово\b', r'\bокей\b', r'\bуколол\b', 
+            r'\bподтверждаю\b', r'\bда\b', r'\bок\b', r'\byes\b', r'\bdone\b'
+        ]
+        return any(re.search(pattern, text_lower) for pattern in confirm_patterns)
 
     def is_snooze_request(self, text: str) -> bool:
         return any(word in text.lower() for word in ['напомни', 'отложи', 'позже', 'потом', 'через', 'snooze']) and self.parse_snooze_command(text) is not None

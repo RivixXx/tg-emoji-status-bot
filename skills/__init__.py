@@ -36,7 +36,7 @@ def register_karina_base_skills(client):
         
         # Подтверждение здоровья
         if data == "confirm_health":
-            reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
+            await reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
             await confirm_health()
             await save_health_record(True)  # Сохраняем в базу!
             await event.answer("✅ Умничка! Я горжусь тобой! ❤️", alert=True)
@@ -49,7 +49,7 @@ def register_karina_base_skills(client):
             # Ищем активное напоминание
             for rid, reminder in reminder_manager.reminders.items():
                 if reminder.is_active and not reminder.is_confirmed:
-                    reminder_manager.snooze_reminder(rid, minutes)
+                    await reminder_manager.snooze_reminder(rid, minutes)
                     await event.answer(f"⏰ Напомню через {minutes} мин!", alert=True)
                     await event.edit(f"{event.message.text}\n\n⏰ Отложено на {minutes} мин.")
                     return
@@ -175,7 +175,7 @@ def register_karina_base_skills(client):
         # 1. Подтверждение здоровья
         if reminder_manager.is_health_confirmation(event.text):
             logger.info(f"✅ Подтверждение здоровья от {event.chat_id}")
-            reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
+            await reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
             await confirm_health()
             await save_health_record(True)  # Сохраняем в базу!
             await event.respond(random.choice([
@@ -193,7 +193,7 @@ def register_karina_base_skills(client):
                 # Ищем активное напоминание
                 for rid, reminder in reminder_manager.reminders.items():
                     if reminder.is_active and not reminder.is_confirmed:
-                        reminder_manager.snooze_reminder(rid, minutes)
+                        await reminder_manager.snooze_reminder(rid, minutes)
                         await event.respond(f"⏰ Хорошо, напомню через {minutes} мин!")
                         return
         
