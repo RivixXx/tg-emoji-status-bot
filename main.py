@@ -286,8 +286,12 @@ async def run_userbot_main():
     hb_task = asyncio.create_task(userbot_heartbeat())
 
     try:
+        # Создаем таски для wait
+        client_task = asyncio.create_task(user_client.run_until_disconnected())
+        shutdown_task = asyncio.create_task(SHUTDOWN_EVENT.wait())
+        
         done, pending = await asyncio.wait(
-            [user_client.run_until_disconnected(), SHUTDOWN_EVENT.wait()],
+            [client_task, shutdown_task],
             return_when=asyncio.FIRST_COMPLETED
         )
         for task in pending:
