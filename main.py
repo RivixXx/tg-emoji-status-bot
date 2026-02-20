@@ -206,8 +206,11 @@ async def run_bot_main():
     
     commands = [
         types.BotCommand("start", "Перезапустить 🔄"),
-        types.BotCommand("calendar", "Планы 📅"),
+        types.BotCommand("app", "Панель управления 📱"),
+        types.BotCommand("calendar", "Мои планы 📅"),
+        types.BotCommand("conflicts", "Конфликты ⚠️"),
         types.BotCommand("health", "Здоровье ❤️"),
+        types.BotCommand("weather", "Погода 🌤"),
         types.BotCommand("news", "Новости 🗞"),
     ]
     await bot_client(functions.bots.SetBotCommandsRequest(

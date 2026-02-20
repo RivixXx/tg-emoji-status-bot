@@ -130,6 +130,12 @@ def register_karina_base_skills(client):
         news = await get_latest_news()
         await event.respond(f"🗞 **Новости:**\n\n{news}")
     
+    @client.on(events.NewMessage(pattern='/weather'))
+    async def weather_handler(event):
+        logger.info(f"📩 /weather от пользователя {event.chat_id}")
+        weather = await get_weather()
+        await event.respond(f"🌤 **Погода:**\n\n{weather}")
+    
     @client.on(events.NewMessage(pattern='/clearrc'))
     async def clear_cache_handler(event):
         """Очистить кэш напоминаний (для тестирования)"""
