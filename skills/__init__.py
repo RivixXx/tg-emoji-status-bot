@@ -134,7 +134,10 @@ def register_karina_base_skills(client):
     async def weather_handler(event):
         logger.info(f"📩 /weather от пользователя {event.chat_id}")
         weather = await get_weather()
-        await event.respond(f"🌤 **Погода:**\n\n{weather}")
+        if not weather:
+            await event.respond("🌤 Ой, не смогла узнать погоду. Проверь API ключ в настройках! 😔")
+        else:
+            await event.respond(f"🌤 **Погода:**\n\n{weather}")
     
     @client.on(events.NewMessage(pattern='/clearrc'))
     async def clear_cache_handler(event):
