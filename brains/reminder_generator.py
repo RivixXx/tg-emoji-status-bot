@@ -171,7 +171,7 @@ async def generate_creative_reminder(
             {"role": "system", "content": REMINDER_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt}
         ],
-        "temperature": 0.8,
+        "temperature": 0.4,
         "max_tokens": 100
     }
     
@@ -218,7 +218,7 @@ async def generate_aura_phrase(phrase_type: str, context: dict = None) -> str:
             {"role": "system", "content": AURA_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt}
         ],
-        "temperature": 0.9,
+        "temperature": 0.5,
         "max_tokens": 100
     }
 

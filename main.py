@@ -337,6 +337,8 @@ async def amain():
         logger.info("👋 Karina AI остановлена.")
 
 if __name__ == '__main__':
+
+    
     try:
         asyncio.run(amain())
     except KeyboardInterrupt:
