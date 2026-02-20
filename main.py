@@ -23,6 +23,7 @@ from brains.emotions import get_emotion_state, set_emotion
 from brains.news import get_latest_news
 from brains.ai import ask_karina
 from auras import state, start_auras
+from skills import register_karina_base_skills
 
 # Настройка логирования
 logging.basicConfig(
@@ -149,57 +150,13 @@ async def api_emotion():
 bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
 user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
 
-# ========== ХЕНДЛЕРЫ БОТА ==========
-
-@bot_client.on(events.NewMessage(pattern='/start'))
-async def start_handler(event):
-    await report_status("bot", "running")
-    async with stats_lock:
-        METRICS["requests_total"] += 1
-    await event.respond(
-        "Привет! Я Карина. 😊\n\nНажми кнопку ниже:",
-        buttons=[types.KeyboardButtonWebView("Открыть панель 📱", url="https://tg-emoji-status-bot-production.up.railway.app/")]
-    )
-
-@bot_client.on(events.NewMessage(incoming=True))
-async def chat_handler(event):
-    if not event.is_private or (event.text and event.text.startswith('/')):
-        return
-    
-    await report_status("bot", "running")
-    async with stats_lock:
-        METRICS["requests_total"] += 1
-    
-    text_low = event.text.lower() if event.text else ''
-    if any(word in text_low for word in ['сделал', 'готово', 'окей', 'уколол']):
-        await event.respond("Умничка! 🥰")
-        return
-    
-    if event.text:
-        start_ts = time.time()
-        async with bot_client.action(event.chat_id, 'typing'):
-            try:
-                # 🚦 Используем семафор для ограничения нагрузки
-                async with AI_SEMAPHORE:
-                    response = await asyncio.wait_for(ask_karina(event.text, chat_id=event.chat_id), timeout=20.0)
-                
-                async with stats_lock:
-                    METRICS["ai_responses_total"] += 1
-                    METRICS["ai_latency_sum"] += (time.time() - start_ts)
-                await event.reply(response)
-            except asyncio.TimeoutError:
-                async with stats_lock:
-                    METRICS["ai_errors"] += 1
-                await event.reply("Ой, я что-то задумалась... попробуй еще раз? 🧠🌀")
-            except Exception as e:
-                async with stats_lock:
-                    METRICS["ai_errors"] += 1
-                logger.error(f"Chat error: {e}")
-
 # ========== ЛОГИКА ЗАПУСКА И SUPERVISOR ==========
 
 async def run_bot_main():
     """Основной цикл бота"""
+    # Регистрируем скиллы из модуля skills
+    register_karina_base_skills(bot_client)
+    
     await bot_client.start(bot_token=KARINA_TOKEN)
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")

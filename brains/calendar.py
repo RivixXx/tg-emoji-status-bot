@@ -26,25 +26,26 @@ def get_calendar_service():
         return None
     
     try:
-        # Очищаем строку от возможных артефактов (внешние кавычки, пробелы)
         creds_raw = GOOGLE_CALENDAR_CREDENTIALS.strip()
+        logger.info(f"📅 Длина строки учетных данных: {len(creds_raw)} симв.")
+        
         if (creds_raw.startswith("'") and creds_raw.endswith("'")) or \
            (creds_raw.startswith('"') and creds_raw.endswith('"')):
             creds_raw = creds_raw[1:-1]
 
         try:
-            # Сначала пробуем стандартный JSON
             creds_dict = json.loads(creds_raw)
-        except json.JSONDecodeError:
-            # Если не вышло (например, одинарные кавычки), пробуем через ast
-            logger.warning("⚠️ GOOGLE_CALENDAR_CREDENTIALS is not a valid JSON, trying literal_eval...")
+        except json.JSONDecodeError as je:
+            logger.warning(f"⚠️ JSONDecodeError: {je}")
+            logger.warning("Trying literal_eval as fallback...")
             creds_dict = ast.literal_eval(creds_raw)
 
         creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         return build('calendar', 'v3', credentials=creds, static_discovery=False)
     except Exception as e:
         logger.error(f"❌ Error connecting to Google Calendar: {e}")
-        logger.error("Check if GOOGLE_CALENDAR_CREDENTIALS contains a valid JSON/dict string.")
+        if len(GOOGLE_CALENDAR_CREDENTIALS) < 500:
+            logger.error(f"⚠️ Строка подозрительно короткая ({len(GOOGLE_CALENDAR_CREDENTIALS)} симв). Возможно, она была обрезана системой!")
         return None
 
 async def add_calendar(calendar_id):
