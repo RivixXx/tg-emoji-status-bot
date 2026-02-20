@@ -64,8 +64,15 @@ async def save_memory(content: str, metadata: dict = None):
         logger.error(f"Save memory failed: {e}")
     return False
 
-async def search_memories(query: str, limit: int = 3):
-    """Ищет похожие воспоминания в базе"""
+async def search_memories(query: str, limit: int = 5, threshold: float = 0.7):
+    """
+    Ищет похожие воспоминания в базе (RAG)
+    
+    Args:
+        query: Запрос пользователя
+        limit: Максимальное количество фактов (top_k)
+        threshold: Порог сходства (similarity threshold)
+    """
     vector = await get_embedding(query)
     if not vector: return ""
     
@@ -76,7 +83,7 @@ async def search_memories(query: str, limit: int = 3):
     }
     payload = {
         "query_embedding": vector,
-        "match_threshold": 0.1,
+        "match_threshold": threshold,
         "match_count": limit
     }
     
@@ -86,10 +93,15 @@ async def search_memories(query: str, limit: int = 3):
             if response.status_code == 200:
                 results = response.json()
                 if not results: 
-                    logger.info(f"🔍 Память: Ничего не найдено (порог 0.1) для '{query}'")
+                    logger.info(f"🔍 Память: Ничего не найдено (порог {threshold}) для '{query}'")
                     return ""
                 
-                logger.info(f"🧠 Память: Найдено {len(results)} фактов.")
+                # Логируем найденные факты и их score для отладки
+                logger.info(f"🧠 Память: Найдено {len(results)} фактов (порог {threshold})")
+                for i, r in enumerate(results):
+                    similarity = r.get('similarity', 0)
+                    logger.debug(f"  [{i}] Score: {similarity:.4f} | Content: {r['content'][:50]}...")
+                
                 return "\n".join([f"- {r['content']}" for r in results])
             else:
                 logger.error(f"Supabase RPC Error: {response.status_code} - {response.text}")

@@ -95,42 +95,36 @@ REMINDER_SYSTEM_PROMPT = """
 - ❌ Негатив без поддержки
 - ❌ Сарказм и обида
 
-### 6. ПРИМЕРЫ КРЕАТИВНЫХ НАПОМИНАНИЙ:
-
-**Укол (soft):**
-- "🌙 Михаил, вечерний ритуал ждёт! Твоя защита — это твоя сила. 💉✨"
-- "💕 Тихий вечерний звонок... Пора позаботиться о главном — о тебе!"
-
-**Укол (firm):**
-- "🤨 Так-так... Карины-статистика показывает: укол ещё не подтверждён!"
-- "👀 Я тут сижу, жду... И не одна! Твоё здоровье тоже ждёт!"
-
-**Обед:**
-- "🍽 Время заправки! Тело просит энергию, а ты его игнорируешь... Обижаюсь! 😤"
-- "☀️ Солнце в зените, а у тебя... пустой желудок! Срочно исправляем! 🥗"
-
-**Встреча:**
-- "⏰ Тик-так... Через 15 минут старт! Ты готов покорять этот мир? 🚀"
-- "🎯 Финишная прямая! 15 минут до встречи. Проверь: всё готово? 💼"
-
-**Перерыв:**
-- "🧘 Стоп-машина! 🛑 Твой мозг курит... в смысле, отдыхает! А ты?"
-- "☕️ Пауза! ⏸️ Две минуты тишины... Ты это заслужил!"
-
-**Утро:**
-- "☀️ БАМ! 🎉 Доброе утро! Этот день ещё не знает, что его ждёт! 💪"
-- "🌅 Рассвет! Новый шанс стать лучшей версией себя! Поехали! 🚀"
-
-**Вечер:**
-- "🌙 День сказал 'пока'! 🌟 Время награды — отдых! Ты заслужил! 🛋"
-- "🌌 Звёзды зажигаются... 💫 А ты всё ещё в делах? Пора на боковую! 😴"
-
 ---
 
 ## ФОРМАТ ОТВЕТА:
 
 Верни **ТОЛЬКО текст напоминания** (без кавычек, без объяснений).
 Максимум 150 символов.
+"""
+
+AURA_SYSTEM_PROMPT = """
+Ты — Карина, цифровая помощница Михаила. Твоя задача — генерировать короткие, живые и креативные фразы для его профиля или приветствий.
+
+## ТИПЫ ФРАЗ:
+
+**bio (описание профиля)**:
+- Тематика: мониторинг транспорта, телематика, ГЛОНАСС/GPS, логистика, эффективность.
+- Стиль: профессиональный, но с "изюминкой", ёмкий.
+- Максимум 70 символов.
+
+**morning_greeting (доброе утро)**:
+- Энергично, вдохновляюще, заботливо.
+- Учитывай контекст (погода, планы, если есть).
+
+**advice (совет по тайм-менеджменту)**:
+- Короткий, полезный, дружелюбный.
+- Про перерывы, фокус, отдых.
+
+## ПРАВИЛА:
+- Будь живой и настоящей.
+- Используй 1-2 уместных эмодзи.
+- Верни **ТОЛЬКО текст фразы**.
 """
 
 
@@ -142,23 +136,20 @@ async def generate_creative_reminder(
 ) -> str:
     """
     Генерирует креативное напоминание через Mistral AI
-    
-    Args:
-        reminder_type: health, lunch, meeting, break, morning, evening
-        escalation_level: soft, firm, strict, urgent
-        context: дополнительные данные (title, minutes, hours, etc.)
-        time_str: время (например "22:00")
-    
-    Returns:
-        str: Креативное сообщение напоминания
     """
     if not MISTRAL_API_KEY:
         logger.error("❌ MISTRAL_API_KEY не установлен!")
         return None
     
+    # Получаем текущую эмоцию Карины
+    from brains.emotions import get_emotion_state
+    emotion_data = await get_emotion_state()
+    current_emotion = emotion_data.get('emotion', 'neutral')
+    
     # Формируем пользовательский промт
     user_prompt = f"""
 Создай напоминание типа '{reminder_type}' с эмоциональным уровнем '{escalation_level}'.
+Текущее настроение Карины: '{current_emotion}'.
 """
     
     if time_str:
@@ -167,7 +158,7 @@ async def generate_creative_reminder(
     if context:
         user_prompt += f"\nКонтекст: {json.dumps(context, ensure_ascii=False)}"
     
-    user_prompt += "\n\nПомни: будь креативной, непредсказуемой и мотивационной! 💫"
+    user_prompt += "\n\nПомни: будь креативной, непредсказуемой и учитывай своё текущее настроение! 💫"
     
     headers = {
         "Authorization": f"Bearer {MISTRAL_API_KEY}",
@@ -180,7 +171,7 @@ async def generate_creative_reminder(
             {"role": "system", "content": REMINDER_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt}
         ],
-        "temperature": 0.8,  # Высокая креативность
+        "temperature": 0.8,
         "max_tokens": 100
     }
     
@@ -191,22 +182,58 @@ async def generate_creative_reminder(
             if response.status_code == 200:
                 result = response.json()
                 reminder_text = result['choices'][0]['message']['content'].strip()
-                
-                # Убираем кавычки если есть
                 reminder_text = reminder_text.strip('"\'')
-                
                 logger.info(f"✨ Сгенерировано напоминание: {reminder_text[:50]}...")
                 return reminder_text
             else:
-                logger.error(f"Mistral API Error: {response.status_code} - {response.text[:200]}")
+                logger.error(f"Mistral API Error: {response.status_code}")
                 return None
-                
     except Exception as e:
         logger.error(f"Generate reminder failed: {e}")
         return None
 
 
-# Кэш для сгенерированных напоминаний (чтобы не генерировать каждый раз)
+async def generate_aura_phrase(phrase_type: str, context: dict = None) -> str:
+    """
+    Генерирует фразу для ауры (bio, greeting, advice)
+    """
+    if not MISTRAL_API_KEY: return None
+    
+    from brains.emotions import get_emotion_state
+    emotion_data = await get_emotion_state()
+    current_emotion = emotion_data.get('emotion', 'neutral')
+
+    user_prompt = f"Тип фразы: {phrase_type}\nНастроение Карины: {current_emotion}"
+    if context:
+        user_prompt += f"\nКонтекст: {json.dumps(context, ensure_ascii=False)}"
+
+    headers = {
+        "Authorization": f"Bearer {MISTRAL_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": "mistral-small-latest",
+        "messages": [
+            {"role": "system", "content": AURA_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.9,
+        "max_tokens": 100
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(MISTRAL_URL, json=payload, headers=headers)
+            if response.status_code == 200:
+                text = response.json()['choices'][0]['message']['content'].strip()
+                return text.strip('"\'')
+    except Exception as e:
+        logger.error(f"Generate aura phrase failed: {e}")
+    return None
+
+
+# Кэш для сгенерированных напоминаний
 _reminder_cache = {}
 
 async def get_or_generate_reminder(
@@ -219,19 +246,11 @@ async def get_or_generate_reminder(
 ) -> str:
     """
     Возвращает напоминание из кэша или генерирует новое
-    
-    Args:
-        reminder_id: Уникальный ID напоминания (например "health_20260218")
-        force_new: Если True — генерировать новое даже если есть в кэше
     """
     cache_key = f"{reminder_id}_{escalation_level}"
-    
-    # Проверяем кэш (если не force_new)
     if not force_new and cache_key in _reminder_cache:
-        logger.debug(f"📦 Напоминание из кэша: {cache_key}")
         return _reminder_cache[cache_key]
     
-    # Генерируем новое
     reminder = await generate_creative_reminder(
         reminder_type=reminder_type,
         escalation_level=escalation_level,
@@ -241,10 +260,8 @@ async def get_or_generate_reminder(
     
     if reminder:
         _reminder_cache[cache_key] = reminder
-        # Очищаем старые кэши (оставляем последние 50)
         if len(_reminder_cache) > 50:
-            oldest_key = next(iter(_reminder_cache))
-            del _reminder_cache[oldest_key]
+            _reminder_cache.pop(next(iter(_reminder_cache)))
     
     return reminder
 

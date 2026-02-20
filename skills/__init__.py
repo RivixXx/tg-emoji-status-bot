@@ -38,6 +38,7 @@ def register_karina_base_skills(client):
         if data == "confirm_health":
             reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
             await confirm_health()
+            await save_health_record(True)  # Сохраняем в базу!
             await event.answer("✅ Умничка! Я горжусь тобой! ❤️", alert=True)
             await event.edit(f"{event.message.text}\n\n✅ Подтверждено!")
             return
@@ -170,6 +171,7 @@ def register_karina_base_skills(client):
             logger.info(f"✅ Подтверждение здоровья от {event.chat_id}")
             reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
             await confirm_health()
+            await save_health_record(True)  # Сохраняем в базу!
             await event.respond(random.choice([
                 "Умничка! 🥰",
                 "Так держать! 👍",
@@ -200,6 +202,7 @@ def register_karina_base_skills(client):
         if any(word in text_low for word in ['сделал', 'готово', 'окей', 'уколол']):
             logger.info(f"✅ Подтверждение здоровья от {event.chat_id}")
             await confirm_health()
+            await save_health_record(True)  # Сохраняем в базу!
             await event.respond(random.choice(["Умничка! 🥰", "Так держать! 👍", "Я спокойна. 😊"]))
             return
 

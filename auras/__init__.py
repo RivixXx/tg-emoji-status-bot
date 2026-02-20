@@ -7,13 +7,12 @@ from telethon.errors import PersistentTimestampOutdatedError
 from brains.config import EMOJI_MAP, MY_ID
 from brains.weather import get_weather
 from brains.news import get_latest_news
+from brains.reminder_generator import generate_aura_phrase
 from auras.phrases import (
     BIO_PHRASES,
     MORNING_GREETINGS,
     TIME_MANAGEMENT_ADVICES,
-    WORK_LIFE_BALANCE_PHRASES,
-    HEALTH_REMINDERS,
-    HEALTH_SCOLDING
+    WORK_LIFE_BALANCE_PHRASES
 )
 
 logger = logging.getLogger(__name__)
@@ -23,14 +22,12 @@ class AuraState:
         self.current_emoji_state = None
         self.last_notif_date = None
         self.last_notif_type = None
-        self.last_health_notif_date = None
-        self.health_reminder_time = None
         self.is_health_confirmed = True
         self.is_awake = False
         self.last_advice_hour = -1
         self.last_overwork_check_date = None
         self.remaining_bio_phrases = []
-        self.last_bio_hour = -1
+        self.last_bio_date = None
 
 state = AuraState()
 
@@ -60,27 +57,27 @@ async def update_emoji_aura(user_client):
         except Exception as e:
             logger.error(f"❌ Ошибка смены статуса: {e}")
 
-async def health_aura(karina_client):
-    """Контроль здоровья (уколы)"""
-    if not karina_client or not MY_ID: return
+async def update_bio_aura(user_client):
+    """Динамическое БИО в рабочее время"""
+    if not user_client.is_connected(): return
     moscow_tz = timezone(timedelta(hours=3))
     now = datetime.now(moscow_tz)
     today = now.strftime('%Y-%m-%d')
-
-    # Напоминание в 22:00
-    if now.hour == 22 and 0 <= now.minute < 5:
-        if state.last_health_notif_date != today:
-            msg = random.choice(HEALTH_REMINDERS) + "\n\n*(Напиши 'сделал', когда закончишь!)*"
-            await karina_client.send_message(MY_ID, msg)
-            state.last_health_notif_date = today
-            state.health_reminder_time = now
-            state.is_health_confirmed = False
-
-    # Ворчание через 10 минут
-    if not state.is_health_confirmed and state.health_reminder_time:
-        if (now - state.health_reminder_time).total_seconds() >= 600:
-            await karina_client.send_message(MY_ID, random.choice(HEALTH_SCOLDING))
-            state.health_reminder_time = now # Сброс таймера для следующего ворчания
+    
+    # Только в будни с 9 до 18
+    if now.weekday() < 5 and 9 <= now.hour < 18:
+        if state.last_bio_date != today:
+            logger.info("🎨 Аура: Генерация нового БИО...")
+            new_bio = await generate_aura_phrase("bio")
+            if not new_bio:
+                new_bio = random.choice(BIO_PHRASES)
+            
+            try:
+                await user_client(functions.account.UpdateProfileRequest(about=new_bio))
+                state.last_bio_date = today
+                logger.info(f"✅ Аура: БИО обновлено: {new_bio}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления БИО: {e}")
 
 async def confirm_health():
     state.is_health_confirmed = True
@@ -94,8 +91,8 @@ async def start_auras(user_client, karina_client):
     while True:
         try:
             await update_emoji_aura(user_client)
-            await health_aura(karina_client)
-            # Здесь можно добавить другие ауры (bio, news, и т.д.)
+            await update_bio_aura(user_client)
+            
             reconnect_attempts = 0  # Сброс счётчика ошибок при успешной итерации
             
         except PersistentTimestampOutdatedError as e:
@@ -104,10 +101,9 @@ async def start_auras(user_client, karina_client):
             
             if reconnect_attempts >= max_reconnect_attempts:
                 logger.error("❌ Превышено количество попыток переподключения. Требуется рестарт.")
-                await asyncio.sleep(300)  # Ждём 5 минут перед следующей попыткой
+                await asyncio.sleep(300)
                 reconnect_attempts = 0
             else:
-                # Переподключение к Telegram
                 try:
                     logger.info("🔄 Переподключение к Telegram...")
                     if user_client.is_connected():
@@ -122,3 +118,5 @@ async def start_auras(user_client, karina_client):
         except Exception as e:
             logger.error(f" Ошибка в цикле Аур: {e}")
             await asyncio.sleep(60)
+            
+        await asyncio.sleep(60)
