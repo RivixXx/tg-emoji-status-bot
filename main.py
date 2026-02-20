@@ -18,7 +18,7 @@ from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION
 from brains.memory import search_memories
 from brains.calendar import get_upcoming_events, get_conflict_report
 from brains.health import get_health_report_text, get_health_stats
-from brains.reminders import reminder_manager, start_reminder_loop
+from brains.reminders import reminder_manager, start_reminder_loop, ReminderType
 from brains.emotions import get_emotion_state, set_emotion
 from brains.news import get_latest_news
 from brains.ai import ask_karina
