@@ -223,9 +223,12 @@ async def run_bot_main():
     heartbeat_task = asyncio.create_task(bot_heartbeat())
     
     try:
-        # Ждем либо дисконнекта, либо сигнала остановки
+        # Создаем таски для wait
+        client_task = asyncio.create_task(bot_client.run_until_disconnected())
+        shutdown_task = asyncio.create_task(SHUTDOWN_EVENT.wait())
+        
         done, pending = await asyncio.wait(
-            [bot_client.run_until_disconnected(), SHUTDOWN_EVENT.wait()],
+            [client_task, shutdown_task],
             return_when=asyncio.FIRST_COMPLETED
         )
         for task in pending:
