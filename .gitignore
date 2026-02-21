@@ -1,5 +1,5 @@
 # Auxiliary files
-docs/
+# docs/ - removed from ignore to keep documentation in repo
 
 # Python
 __pycache__/
