@@ -143,6 +143,22 @@ def register_karina_base_skills(client):
         news = await get_latest_news()
         await event.respond(f"🗞 **Новости:**\n\n{news}")
     
+    @client.on(events.NewMessage(pattern='/remember'))
+    async def remember_handler(event):
+        """Скилл: Запомнить факт"""
+        text_to_save = event.text.replace('/remember', '').strip()
+        if not text_to_save:
+            await event.respond("Напиши, что именно мне нужно запомнить. 😊\nПример: `/remember Мой любимый цвет — синий`")
+            return
+        
+        logger.info(f"🧠 Сохранение в память: {text_to_save}")
+        success = await save_memory(text_to_save, metadata={"source": "manual_command", "user_id": event.chat_id})
+        
+        if success:
+            await event.respond(f"✅ Запомнила! Теперь я буду это знать. 😊")
+        else:
+            await event.respond("Ой, что-то пошло не так при сохранении в базу памяти. 😔")
+
     @client.on(events.NewMessage(pattern='/weather'))
     async def weather_handler(event):
         logger.info(f"📩 /weather от пользователя {event.chat_id}")

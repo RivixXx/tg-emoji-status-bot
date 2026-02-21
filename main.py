@@ -169,6 +169,7 @@ async def run_bot_main():
         types.BotCommand("health", "Здоровье ❤️"),
         types.BotCommand("weather", "Погода 🌤"),
         types.BotCommand("news", "Новости 🗞"),
+        types.BotCommand("remember", "Запомнить факт ✍️"),
     ]
     await bot_client(functions.bots.SetBotCommandsRequest(
         scope=types.BotCommandScopeDefault(), lang_code='ru', commands=commands
