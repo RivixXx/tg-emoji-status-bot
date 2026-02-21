@@ -207,6 +207,10 @@ async def run_userbot_main():
     logger.info("✅ UserBot авторизован")
     await report_status("userbot", "running")
     
+    # Регистрация детектора ID эмодзи
+    from skills import register_discovery_skills
+    register_discovery_skills(user_client)
+    
     from brains.config import MY_ID
     reminder_manager.set_client(bot_client, MY_ID)
     await reminder_manager.load_active_reminders()

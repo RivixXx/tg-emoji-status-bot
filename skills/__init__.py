@@ -20,11 +20,18 @@ logger = logging.getLogger(__name__)
 def register_discovery_skills(client):
     @client.on(events.NewMessage(chats='me', pattern='(?i)id'))
     async def discovery_handler(event):
+        logger.info(f"🔍 Детектор ID вызван пользователем {event.chat_id}")
+        
+        found = False
         if event.message.entities:
             for ent in event.message.entities:
                 if isinstance(ent, types.MessageEntityCustomEmoji):
-                    await event.reply(f"Код эмодзи: <code>{ent.document_id}</code>")
-                    return
+                    await event.reply(f"✅ Код кастомного эмодзи: <code>{ent.document_id}</code>\nСкопируй его и отправь мне.")
+                    found = True
+                    break
+        
+        if not found:
+            await event.reply("❌ Это обычный эмодзи или текст. \nЧтобы получить ID для статуса, отправь **кастомный** эмодзи (из любого Premium-набора).")
 
 def register_karina_base_skills(client):
     # Обработчик callback_query (кнопки напоминаний)
@@ -181,10 +188,17 @@ def register_karina_base_skills(client):
 
         # 🔔 ПРОВЕРКА НАПОМИНАНИЙ
         
-        # 1. Подтверждение здоровья
-        if reminder_manager.is_health_confirmation(event.text):
+        # 1. Подтверждение здоровья (только если есть активное напоминание на сегодня)
+        today_health_id = f"health_{datetime.now().strftime('%Y%m%d')}"
+        is_waiting_health = False
+        if today_health_id in reminder_manager.reminders:
+            r = reminder_manager.reminders[today_health_id]
+            if r.is_active and not r.is_confirmed:
+                is_waiting_health = True
+
+        if is_waiting_health and reminder_manager.is_health_confirmation(event.text):
             logger.info(f"✅ Подтверждение здоровья от {event.chat_id}")
-            await reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
+            await reminder_manager.confirm_reminder(today_health_id)
             await confirm_health()
             await save_health_record(True)  # Сохраняем в базу!
             await event.respond(random.choice([
@@ -208,18 +222,12 @@ def register_karina_base_skills(client):
         
         # 3. Пропуск напоминания
         if reminder_manager.is_skip_request(event.text):
-            logger.info(f"⏭️ Пропуск напоминания от {event.chat_id}")
-            await event.respond("Хорошо, пропускаем. Но я ещё напомню! 😉")
-            return
-        
-        # Детектор подтверждения здоровья (высокий приоритет)
-        text_low = event.text.lower()
-        if any(word in text_low for word in ['сделал', 'готово', 'окей', 'уколол']):
-            logger.info(f"✅ Подтверждение здоровья от {event.chat_id}")
-            await confirm_health()
-            await save_health_record(True)  # Сохраняем в базу!
-            await event.respond(random.choice(["Умничка! 🥰", "Так держать! 👍", "Я спокойна. 😊"]))
-            return
+            # Проверяем, есть ли что пропускать
+            has_active = any(r.is_active and not r.is_confirmed for r in reminder_manager.reminders.values())
+            if has_active:
+                logger.info(f"⏭️ Пропуск напоминания от {event.chat_id}")
+                await event.respond("Хорошо, пропускаем. Но я ещё напомню! 😉")
+                return
 
         if event.is_private:
             logger.info(f"💬 Обработка сообщения в ЛС: {event.text[:30]}...")

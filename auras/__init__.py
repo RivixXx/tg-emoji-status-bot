@@ -53,10 +53,13 @@ async def update_emoji_aura(user_client):
             await user_client(functions.account.UpdateEmojiStatusRequest(
                 emoji_status=types.EmojiStatus(document_id=emoji_id) if emoji_id else types.EmojiStatusEmpty()
             ))
-            state.current_emoji_state = current
             logger.info(f"✨ Аура: статус изменен на {current}")
         except Exception as e:
-            logger.error(f"❌ Ошибка смены статуса: {e}")
+            logger.error(f"❌ Ошибка смены статуса ({current}): {e}")
+        finally:
+            # Помечаем состояние как установленное (даже если была ошибка), 
+            # чтобы не спамить попытками каждую минуту
+            state.current_emoji_state = current
 
 async def update_bio_aura(user_client):
     """Динамическое БИО в рабочее время"""
