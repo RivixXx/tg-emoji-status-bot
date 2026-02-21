@@ -1,11 +1,9 @@
-from telethon import TelegramClient
-from telethon.sessions import StringSession
-from brains.config import API_ID, API_HASH, USER_SESSION, KARINA_TOKEN
+import httpx
 
-# Клиент UserBot (твой аккаунт)
-user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
+# Глобальный клиент для переиспользования соединений во всем приложении
+http_client = httpx.AsyncClient(timeout=30.0)
 
-# Клиент Karina (Бот)
-karina_client = None
-if KARINA_TOKEN:
-    karina_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
+# Общие URL для Mistral
+MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
+MISTRAL_EMBED_URL = "https://api.mistral.ai/v1/embeddings"
+MODEL_NAME = "mistral-small-latest"

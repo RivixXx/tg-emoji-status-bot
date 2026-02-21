@@ -9,14 +9,9 @@ from brains.memory import search_memories, save_memory
 from brains.calendar import create_event, get_upcoming_events, get_conflict_report
 from brains.weather import get_weather
 from brains.health import get_health_report_text
+from brains.clients import http_client, MISTRAL_URL, MISTRAL_EMBED_URL, MODEL_NAME
 
 logger = logging.getLogger(__name__)
-
-MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
-MISTRAL_EMBED_URL = "https://api.mistral.ai/v1/embeddings"
-MODEL_NAME = "mistral-small-latest"
-
-# ========== CIRCUIT BREAKER ==========
 
 class CircuitBreaker:
     def __init__(self, max_failures=3, recovery_time=60):

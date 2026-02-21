@@ -4,8 +4,8 @@ import json
 import asyncio
 from typing import Optional, List, Dict
 from brains.config import MISTRAL_API_KEY, SUPABASE_URL, SUPABASE_KEY
-# Импортируем глобальный клиент для переиспользования соединений
-from brains.ai import http_client, MISTRAL_EMBED_URL
+# Импортируем из общего модуля clients
+from brains.clients import http_client, MISTRAL_EMBED_URL
 
 logger = logging.getLogger(__name__)
 
