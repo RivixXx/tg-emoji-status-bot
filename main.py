@@ -208,7 +208,7 @@ async def run_userbot_main():
     await report_status("userbot", "running")
     
     from brains.config import MY_ID
-    reminder_manager.set_client(user_client, MY_ID)
+    reminder_manager.set_client(bot_client, MY_ID)
     await reminder_manager.load_active_reminders()
     
     def ensure_reminder(type_enum, creator_func, *args):
