@@ -230,6 +230,20 @@ TOOLS = [
                 }
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_to_memory",
+            "description": "Сохраняет важную информацию в долговременную память. Используй, когда пользователь просит что-то запомнить (даты, предпочтения, факты, код доступа и т.д.).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Факт или информация для запоминания"}
+                },
+                "required": ["text"]
+            }
+        }
     }
 ]
 
@@ -317,6 +331,16 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
                         res = f"Вот статистика здоровья! ❤️\n\n{report}"
                         CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
                         return res
+
+                    elif func_name == "save_to_memory":
+                        fact = args["text"]
+                        success = await save_memory(fact, metadata={"source": "ai_chat", "user_id": chat_id})
+                        if success:
+                            res = f"✅ Я всё запомнила! Теперь я буду знать, что: {fact}"
+                            CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
+                            return res
+                        else:
+                            return "Ой, я не смогла это сохранить в свою память... 😔"
 
             response_text = message['content'].strip()
             CHATS_HISTORY[chat_id].append({"role": "assistant", "content": response_text})
