@@ -2,11 +2,13 @@ import httpx
 import logging
 import json
 import asyncio
+from typing import Optional, List, Dict
 from brains.config import MISTRAL_API_KEY, SUPABASE_URL, SUPABASE_KEY
+# Импортируем глобальный клиент для переиспользования соединений
+from brains.ai import http_client, MISTRAL_EMBED_URL
 
 logger = logging.getLogger(__name__)
 
-MISTRAL_EMBED_URL = "https://api.mistral.ai/v1/embeddings"
 SUPABASE_RPC_URL = f"{SUPABASE_URL}/rest/v1/rpc/match_memories"
 SUPABASE_REST_URL = f"{SUPABASE_URL}/rest/v1/memories"
 
@@ -17,18 +19,18 @@ async def get_embedding(text: str, max_retries=3):
 
     for attempt in range(max_retries):
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(MISTRAL_EMBED_URL, json=payload, headers=headers)
-                
-                if response.status_code == 200:
-                    return response.json()['data'][0]['embedding']
-                elif response.status_code == 429:
-                    wait_time = (attempt + 1) * 2
-                    logger.warning(f"⚠️ Mistral Embed rate limit (429). Попытка {attempt + 1}/{max_retries}. Жду {wait_time}s...")
-                    await asyncio.sleep(wait_time)
-                else:
-                    logger.error(f"Mistral Embed Error: {response.status_code}")
-                    return None
+            # Используем глобальный http_client
+            response = await http_client.post(MISTRAL_EMBED_URL, json=payload, headers=headers)
+            
+            if response.status_code == 200:
+                return response.json()['data'][0]['embedding']
+            elif response.status_code == 429:
+                wait_time = (attempt + 1) * 2
+                logger.warning(f"⚠️ Mistral Embed rate limit (429). Попытка {attempt + 1}/{max_retries}. Жду {wait_time}s...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error(f"Mistral Embed Error: {response.status_code}")
+                return None
         except Exception as e:
             logger.error(f"Embedding failed (attempt {attempt + 1}): {e}")
             if attempt < max_retries - 1:
@@ -55,8 +57,7 @@ async def save_memory(content: str, metadata: dict = None):
     }
     
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(SUPABASE_REST_URL, json=payload, headers=headers)
+        async with http_client.post(SUPABASE_REST_URL, json=payload, headers=headers) as response:
             if response.status_code not in [201, 204, 200]:
                 logger.error(f"Supabase Save Error: {response.status_code} - {response.text}")
             return response.status_code in [201, 204, 200]
@@ -64,14 +65,9 @@ async def save_memory(content: str, metadata: dict = None):
         logger.error(f"Save memory failed: {e}")
     return False
 
-async def search_memories(query: str, limit: int = 5, threshold: float = 0.7):
+async def search_memories(query: str, limit: int = 5, threshold: float = 0.7, user_id: int = 0):
     """
-    Ищет похожие воспоминания в базе (RAG)
-    
-    Args:
-        query: Запрос пользователя
-        limit: Максимальное количество фактов (top_k)
-        threshold: Порог сходства (similarity threshold)
+    Ищет похожие воспоминания в базе (RAG) с фильтрацией по пользователю
     """
     vector = await get_embedding(query)
     if not vector: return ""
@@ -84,27 +80,22 @@ async def search_memories(query: str, limit: int = 5, threshold: float = 0.7):
     payload = {
         "query_embedding": vector,
         "match_threshold": threshold,
-        "match_count": limit
+        "match_count": limit,
+        "filter_user_id": user_id  # Передаем ID для фильтрации в RPC
     }
     
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(SUPABASE_RPC_URL, json=payload, headers=headers)
-            if response.status_code == 200:
-                results = response.json()
-                if not results: 
-                    logger.info(f"🔍 Память: Ничего не найдено (порог {threshold}) для '{query}'")
-                    return ""
-                
-                # Логируем найденные факты и их score для отладки
-                logger.info(f"🧠 Память: Найдено {len(results)} фактов (порог {threshold})")
-                for i, r in enumerate(results):
-                    similarity = r.get('similarity', 0)
-                    logger.debug(f"  [{i}] Score: {similarity:.4f} | Content: {r['content'][:50]}...")
-                
-                return "\n".join([f"- {r['content']}" for r in results])
-            else:
-                logger.error(f"Supabase RPC Error: {response.status_code} - {response.text}")
+        response = await http_client.post(SUPABASE_RPC_URL, json=payload, headers=headers)
+        if response.status_code == 200:
+            results = response.json()
+            if not results: 
+                logger.info(f"🔍 Память: Ничего не найдено (порог {threshold}) для '{query}'")
+                return ""
+            
+            logger.info(f"🧠 Память: Найдено {len(results)} фактов (порог {threshold})")
+            return "\n".join([f"- {r['content']}" for r in results])
+        else:
+            logger.error(f"Supabase RPC Error: {response.status_code} - {response.text}")
     except Exception as e:
         logger.error(f"Search memory failed: {e}")
     return ""

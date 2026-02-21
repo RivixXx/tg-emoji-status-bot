@@ -49,13 +49,16 @@ class CircuitBreaker:
 
 ai_breaker = CircuitBreaker()
 
-# =====================================
+# ========== HTTP CLIENT ==========
 
-async def mistral_request_with_retry(client, url, headers, payload, max_retries=2):
+# Глобальный клиент для переиспользования соединений
+http_client = httpx.AsyncClient(timeout=30.0)
+
+async def mistral_request_with_retry(url, headers, payload, max_retries=2):
     """Запрос к Mistral API с retry для 429 ошибок"""
     for attempt in range(max_retries):
         try:
-            response = await client.post(url, json=payload, headers=headers)
+            response = await http_client.post(url, json=payload, headers=headers)
             
             if response.status_code == 200:
                 ai_breaker.record_success()
@@ -254,10 +257,15 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
 
     # Проверка Circuit Breaker
     if not ai_breaker.can_proceed():
-        return "Ой, я кажется немного переутомилась... 🧠💨 Дай мне минутку прийти в себя, и я снова буду готова болтать!"
+        if ai_breaker.is_open and time.time() - ai_breaker.last_failure_time > ai_breaker.recovery_time:
+             # Автоматически сбрасываем при попытке прохода после времени восстановления
+             ai_breaker.record_success()
+        else:
+             return "Ой, я кажется немного переутомилась... 🧠💨 Дай мне минутку прийти в себя, и я снова буду готова болтать!"
 
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    context_memory = await search_memories(prompt)
+    # Передаем chat_id для фильтрации памяти (SaaS ready)
+    context_memory = await search_memories(prompt, user_id=chat_id)
     
     if chat_id not in CHATS_HISTORY:
         CHATS_HISTORY[chat_id] = []
@@ -275,76 +283,83 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
     messages = [{"role": "system", "content": SYSTEM_PROMPT.format(now=now_str)}] + CHATS_HISTORY[chat_id]
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            result = await mistral_request_with_retry(
-                client, MISTRAL_URL, headers,
-                {
-                    "model": MODEL_NAME,
-                    "messages": messages,
-                    "tools": TOOLS,
-                    "tool_choice": "auto",
-                    "temperature": 0.3
-                }
-            )
-            
-            if not result:
-                return "Мои мысли спутались... попробуй еще раз? 🧠"
-            
-            message = result['choices'][0]['message']
+        # Используем глобальный http_client
+        result = await mistral_request_with_retry(
+            MISTRAL_URL, headers,
+            {
+                "model": MODEL_NAME,
+                "messages": messages,
+                "tools": TOOLS,
+                "tool_choice": "auto",
+                "temperature": 0.3
+            }
+        )
+        
+        if not result:
+            return "Мои мысли спутались... попробуй еще раз? 🧠"
+        
+        message = result['choices'][0]['message']
 
-            if message.get("tool_calls"):
-                for tool_call in message["tool_calls"]:
-                    func_name = tool_call["function"]["name"]
-                    args = json.loads(tool_call["function"]["arguments"])
-                    
+        # Оптимизированный цикл обработки tool_calls
+        if message.get("tool_calls"):
+            tool_responses = []
+            for tool_call in message["tool_calls"]:
+                func_name = tool_call["function"]["name"]
+                args = json.loads(tool_call["function"]["arguments"])
+                
+                logger.info(f"🛠 AI вызывает инструмент: {func_name}")
+                tool_result = "Ошибка выполнения инструмента"
+                
+                try:
                     if func_name == "create_calendar_event":
-                        try:
-                            start_dt = datetime.fromisoformat(args["start_time"].replace('Z', ''))
-                            success = await create_event(args["summary"], start_dt, args.get("duration", 30))
-                            if success:
-                                res = f"Сделано! ✅ Записала в календарь: **{args['summary']}** на {start_dt.strftime('%d.%m в %H:%M')}."
-                                CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
-                                return res
-                        except:
-                            return "Не смогла записать в календарь... 🗓"
-                    
+                        start_dt = datetime.fromisoformat(args["start_time"].replace('Z', ''))
+                        # Таймаут на выполнение инструмента
+                        success = await asyncio.wait_for(
+                            create_event(args["summary"], start_dt, args.get("duration", 30)), 
+                            timeout=15.0
+                        )
+                        tool_result = f"Сделано! ✅ Записала в календарь: {args['summary']} на {start_dt.strftime('%d.%m в %H:%M')}." if success else "Ошибка при создании события."
+                
                     elif func_name == "get_upcoming_calendar_events":
-                        events_list = await get_upcoming_events(max_results=args.get("count", 5))
-                        res = f"Вот твои ближайшие планы: 😊\n\n{events_list}"
-                        CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
-                        return res
+                        events_list = await asyncio.wait_for(
+                            get_upcoming_events(max_results=args.get("count", 5)),
+                            timeout=10.0
+                        )
+                        tool_result = f"Список ближайших планов:\n{events_list}"
                     
                     elif func_name == "get_weather_info":
-                        weather_data = await get_weather()
-                        res = f"Я узнала! 🌤 Сейчас за окном {weather_data}. Одевайся по погоде! 😊"
-                        CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
-                        return res
+                        weather_data = await asyncio.wait_for(get_weather(), timeout=5.0)
+                        tool_result = f"Погода: {weather_data}"
 
                     elif func_name == "check_calendar_conflicts":
-                        report = await get_conflict_report()
-                        res = f"Проверила календарь! 📋\n\n{report}"
-                        CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
-                        return res
+                        report = await asyncio.wait_for(get_conflict_report(), timeout=10.0)
+                        tool_result = f"Отчет по конфликтам:\n{report}"
 
                     elif func_name == "get_health_stats":
-                        report = await get_health_report_text(args.get("days", 7))
-                        res = f"Вот статистика здоровья! ❤️\n\n{report}"
-                        CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
-                        return res
+                        report = await asyncio.wait_for(get_health_report_text(args.get("days", 7)), timeout=10.0)
+                        tool_result = f"Статистика здоровья:\n{report}"
 
                     elif func_name == "save_to_memory":
                         fact = args["text"]
-                        success = await save_memory(fact, metadata={"source": "ai_chat", "user_id": chat_id})
-                        if success:
-                            res = f"✅ Я всё запомнила! Теперь я буду знать, что: {fact}"
-                            CHATS_HISTORY[chat_id].append({"role": "assistant", "content": res})
-                            return res
-                        else:
-                            return "Ой, я не смогла это сохранить в свою память... 😔"
+                        success = await asyncio.wait_for(
+                            save_memory(fact, metadata={"source": "ai_chat", "user_id": chat_id}),
+                            timeout=10.0
+                        )
+                        tool_result = f"✅ Я всё запомнила! Теперь я буду знать, что: {fact}" if success else "Ошибка при сохранении в память."
+                except asyncio.TimeoutError:
+                    tool_result = f"Таймаут выполнения инструмента {func_name}"
+                    logger.error(f"⌛️ Tool timeout: {func_name}")
 
-            response_text = message['content'].strip()
-            CHATS_HISTORY[chat_id].append({"role": "assistant", "content": response_text})
-            return response_text
+                tool_responses.append(tool_result)
+
+            # Объединяем результаты всех инструментов
+            final_res = "\n\n".join(tool_responses)
+            CHATS_HISTORY[chat_id].append({"role": "assistant", "content": final_res})
+            return final_res
+
+        response_text = message['content'].strip()
+        CHATS_HISTORY[chat_id].append({"role": "assistant", "content": response_text})
+        return response_text
             
     except Exception as e:
         logger.error(f"Mistral connection error: {e}")

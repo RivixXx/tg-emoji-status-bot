@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import ast
+import asyncio
 from datetime import datetime, timedelta, timezone
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -27,7 +28,6 @@ def get_calendar_service():
     
     try:
         creds_raw = GOOGLE_CALENDAR_CREDENTIALS.strip()
-        logger.info(f"📅 Длина строки учетных данных: {len(creds_raw)} симв.")
         
         if (creds_raw.startswith("'") and creds_raw.endswith("'")) or \
            (creds_raw.startswith('"') and creds_raw.endswith('"')):
@@ -35,17 +35,13 @@ def get_calendar_service():
 
         try:
             creds_dict = json.loads(creds_raw)
-        except json.JSONDecodeError as je:
-            logger.warning(f"⚠️ JSONDecodeError: {je}")
-            logger.warning("Trying literal_eval as fallback...")
+        except json.JSONDecodeError:
             creds_dict = ast.literal_eval(creds_raw)
 
         creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         return build('calendar', 'v3', credentials=creds, static_discovery=False)
     except Exception as e:
         logger.error(f"❌ Error connecting to Google Calendar: {e}")
-        if len(GOOGLE_CALENDAR_CREDENTIALS) < 500:
-            logger.error(f"⚠️ Строка подозрительно короткая ({len(GOOGLE_CALENDAR_CREDENTIALS)} симв). Возможно, она была обрезана системой!")
         return None
 
 async def add_calendar(calendar_id):
@@ -53,7 +49,8 @@ async def add_calendar(calendar_id):
     service = get_calendar_service()
     if not service: return False
     try:
-        service.calendarList().insert(body={'id': calendar_id}).execute()
+        # Исправлено: выполняем блокирующий вызов в отдельном потоке
+        await asyncio.to_thread(service.calendarList().insert(body={'id': calendar_id}).execute)
         logger.info(f"✅ Календарь {calendar_id} успешно добавлен в список.")
         return True
     except Exception as e:
@@ -75,10 +72,10 @@ async def get_upcoming_events(max_results=10, force_refresh=False):
 
     try:
         now_iso = now.isoformat().replace('+00:00', 'Z')
-        calendar_list = service.calendarList().list().execute()
+        
+        # Исправлено: выполняем блокирующий вызов в отдельном потоке
+        calendar_list = await asyncio.to_thread(service.calendarList().list().execute)
         calendars = calendar_list.get('items', [])
-
-        logger.info(f"🔎 Доступные календари: {[c['id'] for c in calendars]}")
 
         if not calendars:
             return "Я не вижу твоих календарей. Пожалуйста, напиши мне свой email, чтобы я могла 'подключиться' к твоим планам. 😊"
@@ -89,11 +86,14 @@ async def get_upcoming_events(max_results=10, force_refresh=False):
             cal_name = entry.get('summary', 'Календарь')
 
             try:
-                events_result = service.events().list(
-                    calendarId=cal_id, timeMin=now_iso,
-                    maxResults=5, singleEvents=True,
-                    orderBy='startTime'
-                ).execute()
+                # Исправлено: выполняем блокирующий вызов в отдельном потоке
+                events_result = await asyncio.to_thread(
+                    service.events().list(
+                        calendarId=cal_id, timeMin=now_iso,
+                        maxResults=5, singleEvents=True,
+                        orderBy='startTime'
+                    ).execute
+                )
 
                 for event in events_result.get('items', []):
                     start = event['start'].get('dateTime', event['start'].get('date'))
@@ -110,10 +110,9 @@ async def get_upcoming_events(max_results=10, force_refresh=False):
             all_events.sort(key=lambda x: x[0])
             result = "\n".join([e[1] for e in all_events[:max_results]])
         
-        # Сохранение в кэш (TTL 5 минут)
+        # Сохранение в кэш
         _calendar_cache["events"] = result
         _calendar_cache["expire_at"] = now + timedelta(minutes=5)
-        logger.debug(f"📅 Календарь: обновлён кэш (TTL 5 мин)")
         
         return result
         
@@ -126,8 +125,8 @@ async def create_event(summary, start_time, duration_minutes=30, description=Non
     if not service: return False
 
     try:
-        # Ищем первый календарь, который не является техническим
-        calendar_list = service.calendarList().list().execute()
+        # Исправлено: выполняем блокирующий вызов в отдельном потоке
+        calendar_list = await asyncio.to_thread(service.calendarList().list().execute)
         calendars = calendar_list.get('items', [])
         cal_id = 'primary'
         for cal in calendars:
@@ -145,34 +144,26 @@ async def create_event(summary, start_time, duration_minutes=30, description=Non
             'end': {'dateTime': (start_time + timedelta(minutes=duration_minutes)).isoformat()},
         }
 
-        service.events().insert(calendarId=cal_id, body=event).execute()
+        # Исправлено: выполняем блокирующий вызов в отдельном потоке
+        await asyncio.to_thread(service.events().insert(calendarId=cal_id, body=event).execute)
         return True
     except Exception as e:
         logger.error(f"Error creating event: {e}")
         return False
 
-
 async def check_calendar_conflicts():
-    """
-    Проверяет календарь на конфликты (наложения событий)
-    
-    Returns:
-        list: Список конфликтов [{"event1": str, "event2": str, "overlap_minutes": int}]
-    """
     service = get_calendar_service()
-    if not service:
-        return []
+    if not service: return []
     
     try:
         now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-        # Получаем события на неделю вперёд
         end_week = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat().replace('+00:00', 'Z')
         
-        calendar_list = service.calendarList().list().execute()
+        # Исправлено: выполняем блокирующий вызов в отдельном потоке
+        calendar_list = await asyncio.to_thread(service.calendarList().list().execute)
         calendars = calendar_list.get('items', [])
         
-        if not calendars:
-            return []
+        if not calendars: return []
         
         all_events = []
         for entry in calendars:
@@ -180,20 +171,19 @@ async def check_calendar_conflicts():
             cal_name = entry.get('summary', 'Календарь')
             
             try:
-                events_result = service.events().list(
-                    calendarId=cal_id, timeMin=now, timeMax=end_week,
-                    maxResults=50, singleEvents=True,
-                    orderBy='startTime'
-                ).execute()
+                # Исправлено: выполняем блокирующий вызов в отдельном потоке
+                events_result = await asyncio.to_thread(
+                    service.events().list(
+                        calendarId=cal_id, timeMin=now, timeMax=end_week,
+                        maxResults=50, singleEvents=True,
+                        orderBy='startTime'
+                    ).execute
+                )
                 
                 for event in events_result.get('items', []):
                     start = event['start'].get('dateTime', event['start'].get('date'))
                     end = event['end'].get('dateTime', event['end'].get('date'))
-                    
-                    # Для全天 событий
-                    if not end:
-                        end = start
-                    
+                    if not end: end = start
                     start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
                     end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
                     
@@ -207,20 +197,13 @@ async def check_calendar_conflicts():
                 logger.error(f"Ошибка получения событий из {cal_id}: {e}")
                 continue
         
-        # Сортируем по времени начала
         all_events.sort(key=lambda x: x['start'])
-        
-        # Ищем конфликты
         conflicts = []
         for i in range(len(all_events) - 1):
             current = all_events[i]
             next_event = all_events[i + 1]
-            
-            # Если конец текущего события позже начала следующего
             if current['end'] > next_event['start']:
                 overlap = (current['end'] - next_event['start']).total_seconds() / 60
-                
-                # Если это не одно и то же событие и наложение > 0 минут
                 if overlap > 0 and current['summary'] != next_event['summary']:
                     conflicts.append({
                         'event1': f"{current['summary']} ({current['calendar']})",
@@ -229,86 +212,16 @@ async def check_calendar_conflicts():
                         'time1': current['start'].strftime('%d.%m %H:%M'),
                         'time2': next_event['start'].strftime('%d.%m %H:%M')
                     })
-        
-        if conflicts:
-            logger.warning(f"⚠️ Найдено конфликтов в календаре: {len(conflicts)}")
-        
         return conflicts
-        
     except Exception as e:
         logger.error(f"Error checking calendar conflicts: {e}")
         return []
 
-
 async def get_conflict_report() -> str:
-    """
-    Возвращает текстовый отчёт о конфликтах в календаре
-    
-    Returns:
-        str: Форматированный отчёт
-    """
     conflicts = await check_calendar_conflicts()
-    
-    if not conflicts:
-        return "✅ В календаре всё чисто! Конфликтов не найдено. 😊"
-    
+    if not conflicts: return "✅ В календаре всё чисто! Конфликтов не найдено. 😊"
     report = ["⚠️ **Обнаружены конфликты в расписании:**\n"]
-    
     for i, conflict in enumerate(conflicts, 1):
-        report.append(
-            f"{i}. **{conflict['event1']}** ({conflict['time1']})\n"
-            f"   ⚡ **{conflict['event2']}** ({conflict['time2']})\n"
-            f"   🕐 Наложение: {conflict['overlap_minutes']} мин.\n"
-        )
-    
+        report.append(f"{i}. **{conflict['event1']}** ({conflict['time1']})\n   ⚡ **{conflict['event2']}** ({conflict['time2']})\n   🕐 Наложение: {conflict['overlap_minutes']} мин.\n")
     report.append("\n💡 **Совет:** Проверь, сможешь ли ты присутствовать на обеих встречах, или перенеси одну из них.")
-    
     return "\n".join(report)
-
-
-async def get_upcoming_events_detailed(max_results=10):
-    """Возвращает события с полными данными для напоминаний"""
-    now = datetime.now(timezone.utc)
-    now_iso = now.isoformat().replace('+00:00', 'Z')
-    
-    service = get_calendar_service()
-    if not service:
-        return []
-    
-    try:
-        calendar_list = service.calendarList().list().execute()
-        calendars = calendar_list.get('items', [])
-        
-        if not calendars:
-            return []
-        
-        all_events = []
-        for entry in calendars:
-            cal_id = entry['id']
-            
-            try:
-                events_result = service.events().list(
-                    calendarId=cal_id, timeMin=now_iso,
-                    maxResults=max_results, singleEvents=True,
-                    orderBy='startTime'
-                ).execute()
-                
-                for event in events_result.get('items', []):
-                    start = event['start'].get('dateTime', event['start'].get('date'))
-                    start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
-                    
-                    all_events.append({
-                        'summary': event['summary'],
-                        'start_dt': start_dt,
-                        'calendar': cal_id,
-                        'description': event.get('description', '')
-                    })
-            except Exception as e:
-                logger.error(f"Ошибка получения событий: {e}")
-                continue
-        
-        return all_events[:max_results]
-        
-    except Exception as e:
-        logger.error(f"Error getting detailed events: {e}")
-        return []
