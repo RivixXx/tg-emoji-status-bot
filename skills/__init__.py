@@ -34,13 +34,19 @@ def register_karina_base_skills(client):
         data = event.data.decode('utf-8') if isinstance(event.data, bytes) else event.data
         logger.info(f"🔘 Callback: {data} от {event.chat_id}")
         
+        # Получаем объект сообщения явно, чтобы избежать AttributeError
+        message = await event.get_message()
+        if not message:
+            logger.error("❌ Не удалось получить сообщение для callback")
+            return
+
         # Подтверждение здоровья
         if data == "confirm_health":
             await reminder_manager.confirm_reminder(f"health_{datetime.now().strftime('%Y%m%d')}")
             await confirm_health()
             await save_health_record(True)  # Сохраняем в базу!
             await event.answer("✅ Умничка! Я горжусь тобой! ❤️", alert=True)
-            await event.edit(f"{event.message.text}\n\n✅ Подтверждено!")
+            await event.edit(f"{message.text}\n\n✅ Подтверждено!")
             return
         
         # Отсрочка (snooze)
@@ -51,37 +57,37 @@ def register_karina_base_skills(client):
                 if reminder.is_active and not reminder.is_confirmed:
                     await reminder_manager.snooze_reminder(rid, minutes)
                     await event.answer(f"⏰ Напомню через {minutes} мин!", alert=True)
-                    await event.edit(f"{event.message.text}\n\n⏰ Отложено на {minutes} мин.")
+                    await event.edit(f"{message.text}\n\n⏰ Отложено на {minutes} мин.")
                     return
         
         # Пропуск
         if data == "skip_health":
             await event.answer("Хорошо, но я ещё напомню! 😉", alert=True)
-            await event.edit(f"{event.message.text}\n\n⏭️ Пропущено.")
+            await event.edit(f"{message.text}\n\n⏭️ Пропущено.")
             return
         
         # Подтверждение встречи
         if data == "confirm_meeting":
             await event.answer("👍 Отлично! Ты готов! 🚀", alert=True)
-            await event.edit(f"{event.message.text}\n\n👍 Готов!")
+            await event.edit(f"{message.text}\n\n👍 Готов!")
             return
         
         # Подтверждение обеда
         if data == "confirm_lunch":
             await event.answer("🍽 Приятного аппетита! 🥗", alert=True)
-            await event.edit(f"{event.message.text}\n\n🍽 Приятного!")
+            await event.edit(f"{message.text}\n\n🍽 Приятного!")
             return
         
         # Подтверждение перерыва
         if data == "confirm_break":
             await event.answer("🧘 Отлично! Отдыхай! 😊", alert=True)
-            await event.edit(f"{event.message.text}\n\n🧘 Отдыхай!")
+            await event.edit(f"{message.text}\n\n🧘 Отдыхай!")
             return
         
         # Просто подтверждение (acknowledge)
         if data == "acknowledge":
             await event.answer("😊 Рада что ты со мной! 💕", alert=False)
-            await event.edit(f"{event.message.text}\n\n😊 💕")
+            await event.edit(f"{message.text}\n\n😊 💕")
             return
         
         # По умолчанию
