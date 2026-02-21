@@ -1,4 +1,7 @@
--- Инициализация базы данных Karina AI
+-- Инициализация базы данных Karina AI (v2.0 - SaaS Ready)
+
+-- Расширение для векторного поиска
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Таблица для истории здоровья (уколы, замеры)
 CREATE TABLE IF NOT EXISTS health_records (
@@ -24,6 +27,38 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_health_date ON health_records(date DESC);
 CREATE INDEX IF NOT EXISTS idx_health_user ON health_records(user_id);
 CREATE INDEX IF NOT EXISTS idx_memories_embedding ON memories USING ivfflat (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_memories_metadata_user ON memories USING gin (metadata);
+
+-- Функция для поиска в памяти с фильтрацией по user_id
+CREATE OR REPLACE FUNCTION match_memories (
+  query_embedding vector(1024),
+  match_threshold float,
+  match_count int,
+  filter_user_id bigint DEFAULT 0
+)
+RETURNS TABLE (
+  id bigint,
+  content text,
+  metadata jsonb,
+  similarity float
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    memories.id,
+    memories.content,
+    memories.metadata,
+    1 - (memories.embedding <=> query_embedding) AS similarity
+  FROM memories
+  WHERE 
+    (filter_user_id = 0 OR (memories.metadata->>'user_id')::bigint = filter_user_id)
+    AND 1 - (memories.embedding <=> query_embedding) > match_threshold
+  ORDER BY memories.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
 
 -- Комментарии
 COMMENT ON TABLE health_records IS 'История напоминаний о здоровье (уколы, замеры)';

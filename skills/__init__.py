@@ -198,8 +198,11 @@ def register_karina_base_skills(client):
                 event.text = text
                 logger.info(f"🎤 Голос расшифрован: {text}")
 
-        if not event.text or event.text.startswith('/'):
-            logger.info(f"⚠️ Пропуск (нет текста или команда)")
+        if not event.text:
+            return
+
+        if event.text.startswith('/'):
+            logger.info(f"⚡️ Пропуск команды в чат-хендлере: {event.text.split()[0]}")
             return
 
         # 🔔 ПРОВЕРКА НАПОМИНАНИЙ
