@@ -97,5 +97,5 @@ async def search_memories(query: str, limit: int = 5, threshold: float = 0.7, us
         else:
             logger.error(f"Supabase RPC Error: {response.status_code} - {response.text}")
     except Exception as e:
-        logger.error(f"Search memory failed: {e}")
+        logger.error(f"Search memory failed with error: {type(e).__name__}: {str(e)}")
     return ""

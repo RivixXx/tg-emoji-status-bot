@@ -7,6 +7,8 @@ from telethon.errors import PersistentTimestampOutdatedError
 from brains.config import EMOJI_MAP, MY_ID
 from brains.weather import get_weather
 from brains.news import get_latest_news
+from brains.employees import get_todays_birthdays, generate_birthday_card
+from brains.ai import ask_karina
 from brains.reminder_generator import generate_aura_phrase
 from auras.phrases import (
     BIO_PHRASES,
@@ -87,6 +89,35 @@ async def confirm_health():
     state.is_health_confirmed = True
     logger.info("✅ Здоровье: Подтверждено пользователем.")
 
+async def check_birthdays_task(karina_client):
+    """Ежедневная проверка дней рождения сотрудников"""
+    moscow_tz = timezone(timedelta(hours=3))
+    now = datetime.now(moscow_tz)
+    
+    # Запускаем один раз в день, например в 9:05 утра
+    if now.hour == 9 and now.minute == 5:
+        logger.info("🎂 Проверка дней рождения сотрудников...")
+        celebrants = await get_todays_birthdays()
+        
+        for emp in celebrants:
+            logger.info(f"🥳 Сегодня день рождения у {emp['full_name']}!")
+            
+            # 1. Генерируем поздравление через AI
+            prompt = f"Напиши теплое, оригинальное корпоративное поздравление для сотрудника по имени {emp['full_name']}. Учти его качества: {emp['characteristics']}. Стиль: дружелюбная Карина AI."
+            greeting_text = await ask_karina(prompt)
+            
+            # 2. Генерируем открытку (пока логируем)
+            await generate_birthday_card(emp)
+            
+            # 3. Отправляем в группу (здесь нужен ID вашей группы)
+            GROUP_ID = os.environ.get('TEAM_GROUP_ID')
+            if GROUP_ID:
+                try:
+                    await karina_client.send_message(int(GROUP_ID), f"🥳 **С ДНЁМ РОЖДЕНИЯ!** 🎂\n\n{greeting_text}")
+                    logger.info(f"✅ Поздравление для {emp['full_name']} отправлено в группу.")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка отправки поздравления: {e}")
+
 async def start_auras(user_client, karina_client):
     """Главный цикл фоновых задач"""
     reconnect_attempts = 0
@@ -96,6 +127,7 @@ async def start_auras(user_client, karina_client):
         try:
             await update_emoji_aura(user_client)
             await update_bio_aura(user_client)
+            await check_birthdays_task(karina_client)
             
             reconnect_attempts = 0  # Сброс счётчика ошибок при успешной итерации
             
