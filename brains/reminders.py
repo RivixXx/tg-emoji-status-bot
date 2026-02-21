@@ -220,9 +220,9 @@ class ReminderManager:
                 (EscalationLevel.URGENT, reminder.escalate_after[2] if len(reminder.escalate_after) > 2 else 60),
             ]
             for level, delay_minutes in levels:
-                if not reminder.is_active or reminder.is_confirmed: return
+                if reminder.is_confirmed: return
                 await asyncio.sleep(delay_minutes * 60)
-                if not reminder.is_active or reminder.is_confirmed: return
+                if reminder.is_confirmed: return
                 reminder.current_level = level
                 await self.send_reminder(reminder, force_new=True)
         
@@ -351,7 +351,9 @@ async def start_reminder_loop():
                 
                 if now >= r.scheduled_time:
                     await reminder_manager.send_reminder(r)
-                    r.is_active = False  # Деактивируем после отправки
+                    r.is_active = False  # Деактивируем для основного цикла
+                    await reminder_manager._save_to_db(r) # Сохраняем неактивное состояние в БД!
+                    
                     if r.escalate_after:
                         await reminder_manager.start_escalation(r)
             await asyncio.sleep(60)
