@@ -90,6 +90,14 @@
 
 ```
 tg-emoji-status-bot/
+├── docs/                # Project documentation and metadata
+│   ├── DEPLOY_HOME.md   # Home server deployment guide
+│   ├── DOTEUP.md        # Update log
+│   ├── FIX.MD           # Bugfix notes
+│   ├── init.sql         # Database initialization script
+│   ├── MVP_DONE.md      # Completed features
+│   ├── ROADMAP.md       # Future development
+│   └── SYSTEM_PROMPT.md # Karina's personality doc
 ├── main.py              # Entry point (Bot + UserBot + Web)
 ├── brains/              # Core intelligence
 │   ├── ai.py           # Mistral AI + System Prompt
@@ -112,16 +120,11 @@ tg-emoji-status-bot/
 ├── static/             # Mini App frontend
 │   ├── index.html      # React SPA (bubble UI)
 │   └── karina.jpg      # Background image
-├── .env.example        # Environment template
 ├── .gitignore          # Git ignore rules
 ├── requirements.txt    # Python dependencies
 ├── Procfile           # Railway deployment config
 ├── docker-compose.yml # Docker setup
-├── Dockerfile         # Docker image
-├── ROADMAP.md         # Future development
-├── MVP_DONE.md        # Completed features
-├── DEPLOY_HOME.md     # Home server deployment guide
-└── SYSTEM_PROMPT.md   # Karina's personality doc
+└── Dockerfile         # Docker image
 ```
 
 ---
@@ -132,12 +135,12 @@ tg-emoji-status-bot/
 
 1. Зайди на https://railway.app
 2. New Project → Deploy from GitHub repo
-3. Добавь переменные окружения из `.env.example`
+3. Добавь переменные окружения
 4. Дождись сборки (1–3 минуты)
 
 ### Вариант 2: Домашний сервер (Ubuntu 22.04)
 
-См. [`DEPLOY_HOME.md`](DEPLOY_HOME.md) — полная инструкция.
+См. [`docs/DEPLOY_HOME.md`](docs/DEPLOY_HOME.md) — полная инструкция.
 
 **Кратко:**
 
@@ -166,7 +169,7 @@ python main.py
 
 ## 📝 Актуальный Системный Промпт
 
-См. [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) — полное описание личности Карины, правил общения и инструментов.
+См. [`docs/SYSTEM_PROMPT.md`](docs/SYSTEM_PROMPT.md) — полное описание личности Карины, правил общения и инструментов.
 
 ---
 

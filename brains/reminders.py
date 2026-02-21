@@ -351,6 +351,7 @@ async def start_reminder_loop():
                 
                 if now >= r.scheduled_time:
                     await reminder_manager.send_reminder(r)
+                    r.is_active = False  # Деактивируем после отправки
                     if r.escalate_after:
                         await reminder_manager.start_escalation(r)
             await asyncio.sleep(60)

@@ -49,6 +49,7 @@ async def update_emoji_aura(user_client):
     if current != state.current_emoji_state and user_client.is_connected():
         emoji_id = EMOJI_MAP.get(current)
         try:
+            logger.info(f"🔄 Попытка смены эмодзи-статуса на {current} (ID: {emoji_id})")
             await user_client(functions.account.UpdateEmojiStatusRequest(
                 emoji_status=types.EmojiStatus(document_id=emoji_id) if emoji_id else types.EmojiStatusEmpty()
             ))
