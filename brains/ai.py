@@ -9,6 +9,7 @@ from brains.memory import search_memories, save_memory
 from brains.calendar import create_event, get_upcoming_events, get_conflict_report
 from brains.weather import get_weather
 from brains.health import get_health_report_text
+from brains.employees import get_todays_birthdays
 from brains.clients import http_client, MISTRAL_URL, MISTRAL_EMBED_URL, MODEL_NAME
 
 logger = logging.getLogger(__name__)
@@ -251,6 +252,17 @@ TOOLS = [
                 "required": ["text"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_employee_birthdays",
+            "description": "Проверяет, есть ли у кого-то из сотрудников день рождения сегодня. Используй, когда спрашивают про дни рождения коллег или праздники сегодня.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
     }
 ]
 
@@ -350,6 +362,14 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
                             timeout=10.0
                         )
                         tool_result = f"✅ Я всё запомнила! Теперь я буду знать, что: {fact}" if success else "Ошибка при сохранении в память."
+                    
+                    elif func_name == "check_employee_birthdays":
+                        celebrants = await asyncio.wait_for(get_todays_birthdays(), timeout=10.0)
+                        if not celebrants:
+                            tool_result = "Сегодня дней рождения нет. 😊"
+                        else:
+                            names = ", ".join([emp['full_name'] for emp in celebrants])
+                            tool_result = f"Да! Сегодня день рождения празднуют: {names}. 🥳 Не забудь поздравить!"
                 except asyncio.TimeoutError:
                     tool_result = f"Таймаут выполнения инструмента {func_name}"
                     logger.error(f"⌛️ Tool timeout: {func_name}")
