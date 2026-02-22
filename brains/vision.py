@@ -15,9 +15,9 @@ import httpx
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
-from brains.clients import http_client, MISTRAL_API_KEY
+from brains.clients import http_client, supabase_client
+from brains.config import MISTRAL_API_KEY
 from brains.memory import save_memory
-from brains.clients import supabase_client
 
 logger = logging.getLogger(__name__)
 
