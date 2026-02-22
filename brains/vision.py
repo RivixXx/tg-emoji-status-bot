@@ -477,7 +477,3 @@ async def get_vision_history(user_id: int, days: int = 30, limit: int = 20) -> L
     except Exception as e:
         logger.error(f"Error getting vision history: {e}")
         return []
-
-
-# ============================================================================
-|
