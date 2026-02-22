@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import os
 from datetime import datetime, timezone, timedelta
 from telethon import functions, types
 from telethon.errors import PersistentTimestampOutdatedError
@@ -10,6 +11,7 @@ from brains.news import get_latest_news
 from brains.employees import get_todays_birthdays, generate_birthday_card
 from brains.ai import ask_karina
 from brains.reminder_generator import generate_aura_phrase
+from brains.reminders import reminder_manager, ReminderType
 from auras.phrases import (
     BIO_PHRASES,
     MORNING_GREETINGS,
@@ -90,25 +92,24 @@ async def confirm_health():
     logger.info("✅ Здоровье: Подтверждено пользователем.")
 
 async def check_birthdays_task(karina_client):
-    """Ежедневная проверка дней рождения сотрудников"""
+    """Ежедневная проверка дней рождения сотрудников (8:15)"""
     moscow_tz = timezone(timedelta(hours=3))
     now = datetime.now(moscow_tz)
-    
-    # Запускаем один раз в день, например в 9:05 утра
-    if now.hour == 9 and now.minute == 5:
+
+    if now.hour == 8 and now.minute == 15:
         logger.info("🎂 Проверка дней рождения сотрудников...")
         celebrants = await get_todays_birthdays()
-        
+
         for emp in celebrants:
             logger.info(f"🥳 Сегодня день рождения у {emp['full_name']}!")
-            
+
             # 1. Генерируем поздравление через AI
             prompt = f"Напиши теплое, оригинальное корпоративное поздравление для сотрудника по имени {emp['full_name']}. Учти его качества: {emp['characteristics']}. Стиль: дружелюбная Карина AI."
             greeting_text = await ask_karina(prompt)
-            
+
             # 2. Генерируем открытку (пока логируем)
             await generate_birthday_card(emp)
-            
+
             # 3. Отправляем в группу (здесь нужен ID вашей группы)
             GROUP_ID = os.environ.get('TEAM_GROUP_ID')
             if GROUP_ID:
@@ -118,23 +119,86 @@ async def check_birthdays_task(karina_client):
                 except Exception as e:
                     logger.error(f"❌ Ошибка отправки поздравления: {e}")
 
+
+async def check_calendar_reminders_task(karina_client):
+    """
+    Утренняя проверка календаря на сегодня (7:00)
+    Создаёт напоминания за 15 минут до каждого события
+    """
+    moscow_tz = timezone(timedelta(hours=3))
+    now = datetime.now(moscow_tz)
+
+    # Запускаем в 7:00 утра
+    if now.hour == 7 and now.minute == 0:
+        logger.info("📅 Утренняя проверка календаря на сегодня...")
+        
+        from brains.calendar import get_today_calendar_events
+        
+        # Получаем события на сегодня
+        events = await get_today_calendar_events()
+        
+        if not events:
+            logger.info("📅 На сегодня событий нет")
+            return
+        
+        created_count = 0
+        
+        for event in events:
+            event_time = event['start']
+            reminder_time = event_time - timedelta(minutes=15)
+            
+            # Пропускаем если время напоминания уже прошло
+            if reminder_time <= now:
+                logger.debug(f"⏭️ Пропущено событие '{event['summary']}' — время напоминания прошло")
+                continue
+            
+            reminder_id = f"meeting_{int(event_time.timestamp())}"
+            
+            # Проверяем, нет ли уже такого напоминания
+            if reminder_id in reminder_manager.reminders:
+                logger.debug(f"⚠️ Напоминание для '{event['summary']}' уже существует")
+                continue
+            
+            # Создаём напоминание
+            reminder = Reminder(
+                id=reminder_id,
+                type=ReminderType.MEETING,
+                message=f"Встреча: {event['summary']}",
+                scheduled_time=reminder_time,
+                escalate_after=[5, 10],  # Короткая эскалация для встреч
+                context={
+                    "title": event['summary'],
+                    "minutes": 15,
+                    "source": "auto_morning_check",
+                    "event_start": event_time.isoformat(),
+                    "calendar": event.get('calendar', '')
+                }
+            )
+            
+            await reminder_manager.add_reminder(reminder)
+            created_count += 1
+            logger.info(f"🔔 Создано напоминание: {event['summary']} на {reminder_time.strftime('%H:%M')}")
+        
+        logger.info(f"✅ Проверка завершена. Создано напоминаний: {created_count}")
+
 async def start_auras(user_client, karina_client):
     """Главный цикл фоновых задач"""
     reconnect_attempts = 0
     max_reconnect_attempts = 5
-    
+
     while True:
         try:
             await update_emoji_aura(user_client)
             await update_bio_aura(user_client)
             await check_birthdays_task(karina_client)
-            
+            await check_calendar_reminders_task(karina_client)
+
             reconnect_attempts = 0  # Сброс счётчика ошибок при успешной итерации
-            
+
         except PersistentTimestampOutdatedError as e:
             logger.warning(f"⚠️ Telegram: рассинхронизация timestamp (попытка {reconnect_attempts + 1}/{max_reconnect_attempts})")
             reconnect_attempts += 1
-            
+
             if reconnect_attempts >= max_reconnect_attempts:
                 logger.error("❌ Превышено количество попыток переподключения. Требуется рестарт.")
                 await asyncio.sleep(300)
@@ -150,9 +214,9 @@ async def start_auras(user_client, karina_client):
                 except Exception as reconnect_err:
                     logger.error(f"❌ Ошибка переподключения: {reconnect_err}")
                     await asyncio.sleep(30)
-                    
+
         except Exception as e:
             logger.error(f" Ошибка в цикле Аур: {e}")
             await asyncio.sleep(60)
-            
+
         await asyncio.sleep(60)
