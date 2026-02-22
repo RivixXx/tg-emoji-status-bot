@@ -109,6 +109,7 @@ def register_karina_base_skills(client):
             "Привет! Я Карина. 😊\n\nЯ теперь не просто бот, у меня есть удобная панель управления! Нажми кнопку ниже или используй /app.",
             buttons=[types.KeyboardButtonWebView("Открыть панель 📱", url="https://tg-emoji-status-bot-production.up.railway.app/")]
         )
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/app'))
     async def app_command_handler(event):
@@ -118,12 +119,14 @@ def register_karina_base_skills(client):
             "Твоя персональная панель управления Кариной:",
             buttons=[types.KeyboardButtonWebView("Открыть панель 📱", url="https://tg-emoji-status-bot-production.up.railway.app/")]
         )
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/calendar'))
     async def calendar_handler(event):
         logger.info(f"📩 /calendar от пользователя {event.chat_id}")
         info = await get_upcoming_events()
         await event.respond(f"🗓 **Твои планы:**\n\n{info}")
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/conflicts'))
     async def conflicts_handler(event):
@@ -131,6 +134,7 @@ def register_karina_base_skills(client):
         logger.info(f"📩 /conflicts от пользователя {event.chat_id}")
         report = await get_conflict_report()
         await event.respond(report)
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/health'))
     async def health_handler(event):
@@ -138,13 +142,8 @@ def register_karina_base_skills(client):
         logger.info(f"📩 /health от пользователя {event.chat_id}")
         report = await get_health_report_text(7)
         await event.respond(report)
+        raise events.StopPropagation
 
-    @client.on(events.NewMessage(pattern='/news'))
-    async def news_handler(event):
-        logger.info(f"📩 /news от пользователя {event.chat_id}")
-        news = await get_latest_news()
-        await event.respond(f"🗞 **Новости:**\n\n{news}")
-    
     @client.on(events.NewMessage(pattern='/remember'))
     async def remember_handler(event):
         """Скилл: Запомнить факт"""
@@ -152,14 +151,15 @@ def register_karina_base_skills(client):
         if not text_to_save:
             await event.respond("Напиши, что именно мне нужно запомнить. 😊\nПример: `/remember Мой любимый цвет — синий`")
             return
-        
+
         logger.info(f"🧠 Сохранение в память: {text_to_save}")
         success = await save_memory(text_to_save, metadata={"source": "manual_command", "user_id": event.chat_id})
-        
+
         if success:
             await event.respond(f"✅ Запомнила! Теперь я буду это знать. 😊")
         else:
             await event.respond("Ой, что-то пошло не так при сохранении в базу памяти. 😔")
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/weather'))
     async def weather_handler(event):
@@ -169,12 +169,14 @@ def register_karina_base_skills(client):
             await event.respond("🌤 Ой, не смогла узнать погоду. Проверь API ключ в настройках! 😔")
         else:
             await event.respond(f"🌤 **Погода:**\n\n{weather}")
-    
+        raise events.StopPropagation
+
     @client.on(events.NewMessage(pattern='/clearrc'))
     async def clear_cache_handler(event):
         """Очистить кэш напоминаний (для тестирования)"""
         clear_cache()
         await event.respond("🧹 Кэш напоминаний очищен! Теперь все напоминания будут уникальными! ✨")
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/summary'))
     async def summary_handler(event):
@@ -211,18 +213,19 @@ def register_karina_base_skills(client):
 {summary['ai_summary']}
 """
         await event.respond(message)
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/aurasettings'))
     async def aura_settings_handler(event):
         """Скилл: Управление настройками аур"""
         logger.info(f"📩 /aurasettings от пользователя {event.chat_id}")
-        
+
         args = event.text.split()
-        
+
         if len(args) < 2:
             # Показываем текущие настройки
             settings = await aura_settings_manager.get_settings(event.chat_id)
-            
+
             message = f"""
 ⚙️ **Настройки аур**
 
@@ -239,35 +242,37 @@ def register_karina_base_skills(client):
 /aurasettings disable <aura_name>
 """
             await event.respond(message)
-            return
-        
+            raise events.StopPropagation
+
         command = args[1].lower()
-        
+
         if command == 'enable' and len(args) >= 3:
             aura_name = args[2].lower()
             time_val = args[3] if len(args) > 3 else None
-            
-            valid_auras = ['emoji_status', 'bio_status', 'health_reminder', 'morning_greeting', 
+
+            valid_auras = ['emoji_status', 'bio_status', 'health_reminder', 'morning_greeting',
                           'evening_reminder', 'lunch_reminder', 'break_reminder']
-            
+
             if aura_name not in valid_auras:
                 await event.respond(f"❌ Неизвестная аура. Доступные: {', '.join(valid_auras)}")
-                return
-            
+                raise events.StopPropagation
+
             await aura_settings_manager.update_aura(
-                event.chat_id, 
-                aura_name, 
+                event.chat_id,
+                aura_name,
                 enabled=True,
                 start_time=time_val
             )
             await event.respond(f"✅ Аура '{aura_name}' включена{' в ' + time_val if time_val else ''}")
-        
+            raise events.StopPropagation
+
         elif command == 'disable' and len(args) >= 3:
             aura_name = args[2].lower()
-            
+
             await aura_settings_manager.update_aura(event.chat_id, aura_name, enabled=False)
             await event.respond(f"⏸️ Аура '{aura_name}' выключена")
-        
+            raise events.StopPropagation
+
         else:
             await event.respond("""
 Используйте:
@@ -316,6 +321,8 @@ def register_karina_base_skills(client):
                 await event.respond(message[i:i+4000])
         else:
             await event.respond(message)
+        
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/birthdays'))
     async def birthdays_handler(event):
@@ -346,103 +353,113 @@ def register_karina_base_skills(client):
             message += f"• {emp['full_name']} — {bd_date} (через {days_left} дн.)\n"
 
         await event.respond(message)
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/news'))
     async def news_handler(event):
         """Скилл: Свежие новости телематики"""
         logger.info(f"📩 /news от пользователя {event.chat_id}")
-        
+
         from brains.news import get_latest_news
-        
+
         # Проверяем аргументы
         args = event.text.split()
         force_refresh = False
-        
+
         if len(args) > 1 and args[1].lower() in ['force', 'fresh', 'обновить']:
             force_refresh = True
             await event.respond("🔄 Обновляю новости...")
-        
+
         news = await get_latest_news(limit=5, force_refresh=force_refresh, user_id=event.chat_id)
         await event.respond(news)
+        
+        # Важно: возвращаем чтобы не сработал chat_handler
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/newsforce'))
     async def news_force_handler(event):
         """Скилл: Принудительное обновление новостей (очистка кэша)"""
         logger.info(f"📩 /newsforce от пользователя {event.chat_id}")
-        
+
         from brains.news import get_latest_news, clear_news_cache
-        
+
         clear_news_cache()
         await event.respond("🧹 Кэш новостей очищен. Загружаю свежие данные...")
-        
+
         news = await get_latest_news(limit=5, force_refresh=True, user_id=event.chat_id)
         await event.respond(news)
+        
+        # Важно: возвращаем чтобы не сработал chat_handler
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/newssources'))
     async def news_sources_handler(event):
         """Скилл: Управление источниками новостей"""
         logger.info(f"📩 /newssources от пользователя {event.chat_id}")
-        
+
         from brains.news import get_news_sources, enable_source, disable_source
-        
+
         args = event.text.split()
-        
+
         if len(args) < 2:
             # Показываем список источников
             sources = await get_news_sources()
-            
+
             message = "📰 **Источники новостей:**\n\n"
             for src in sources:
                 status = "✅" if src.get("enabled", True) else "⏸️"
                 message += f"{status} **{src['name']}** ({src['category']})\n"
                 message += f"   `{src['url']}`\n\n"
-            
+
             message += """**Использование:**
 `/newssources enable <name>` — включить
 `/newssources disable <name>` — отключить
 """
             await event.respond(message)
-            return
-        
+            raise events.StopPropagation
+
         # Управление источниками
         command = args[1].lower()
         source_name = " ".join(args[2:]) if len(args) > 2 else ""
-        
+
         if command == 'enable':
             success = await enable_source(source_name)
             if success:
                 await event.respond(f"✅ Источник '{source_name}' включен")
             else:
                 await event.respond(f"❌ Источник '{source_name}' не найден")
-        
+
         elif command == 'disable':
             success = await disable_source(source_name)
             if success:
                 await event.respond(f"⏸️ Источник '{source_name}' отключен")
             else:
                 await event.respond(f"❌ Источник '{source_name}' не найден")
-        
+
         else:
             await event.respond("Неизвестная команда. Используйте /newssources для справки.")
+        
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(pattern='/newsclear'))
     async def news_clear_handler(event):
         """Скилл: Очистить историю новостей"""
         logger.info(f"📩 /newsclear от пользователя {event.chat_id}")
-        
+
         from brains.news import clear_old_news_history
-        
+
         args = event.text.split()
         days = 30
-        
+
         if len(args) > 1:
             try:
                 days = int(args[1])
             except ValueError:
                 pass
-        
+
         count = await clear_old_news_history(days)
         await event.respond(f"🧹 Удалено {count} новостей старше {days} дн.")
+        raise events.StopPropagation
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
