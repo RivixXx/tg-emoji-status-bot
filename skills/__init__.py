@@ -11,6 +11,8 @@ from brains.health import get_health_report_text, save_health_record
 from brains.stt import transcribe_voice
 from brains.reminders import reminder_manager, ReminderType
 from brains.reminder_generator import clear_cache
+from brains.smart_summary import generate_weekly_summary
+from brains.aura_settings import aura_settings_manager, UserAuraSettings
 from auras import confirm_health
 
 from datetime import datetime, timedelta
@@ -173,6 +175,108 @@ def register_karina_base_skills(client):
         """Очистить кэш напоминаний (для тестирования)"""
         clear_cache()
         await event.respond("🧹 Кэш напоминаний очищен! Теперь все напоминания будут уникальными! ✨")
+
+    @client.on(events.NewMessage(pattern='/summary'))
+    async def summary_handler(event):
+        """Скилл: Еженедельный отчёт Smart Summary"""
+        logger.info(f"📩 /summary от пользователя {event.chat_id}")
+        
+        # Парсим аргументы (количество дней)
+        args = event.text.split()
+        days = 7
+        if len(args) > 1:
+            try:
+                days = int(args[1])
+                days = max(1, min(days, 30))  # От 1 до 30 дней
+            except ValueError:
+                pass
+        
+        await event.respond(f"📊 Генерирую отчёт за {days} дн...")
+        
+        summary = await generate_weekly_summary(event.chat_id, days)
+        
+        message = f"""
+📊 **Еженедельный отчёт**
+{summary['period']['start']} - {summary['period']['end']}
+
+❤️ **Здоровье:**
+✅ Подтверждено: {summary['health']['confirmed']}
+❌ Пропущено: {summary['health']['missed']}
+📈 Успешность: {summary['health']['compliance_rate']}%
+📊 Тренд: {summary['health']['trend']}
+
+🧠 **Память:**
+📝 Новых воспоминаний: {summary['memories']['new_memories']}
+
+{summary['ai_summary']}
+"""
+        await event.respond(message)
+
+    @client.on(events.NewMessage(pattern='/aurasettings'))
+    async def aura_settings_handler(event):
+        """Скилл: Управление настройками аур"""
+        logger.info(f"📩 /aurasettings от пользователя {event.chat_id}")
+        
+        args = event.text.split()
+        
+        if len(args) < 2:
+            # Показываем текущие настройки
+            settings = await aura_settings_manager.get_settings(event.chat_id)
+            
+            message = f"""
+⚙️ **Настройки аур**
+
+🎨 Emoji-статус: {'✅' if settings.emoji_status.enabled else '❌'} {settings.emoji_status.start_time}-{settings.emoji_status.end_time}
+📝 Био-статус: {'✅' if settings.bio_status.enabled else '❌'} {settings.bio_status.start_time}-{settings.bio_status.end_time}
+❤️ Напоминание о здоровье: {'✅' if settings.health_reminder.enabled else '❌'} {settings.health_reminder.start_time}
+☀️ Утреннее приветствие: {'✅' if settings.morning_greeting.enabled else '❌'} {settings.morning_greeting.start_time}
+🌙 Вечернее напоминание: {'✅' if settings.evening_reminder.enabled else '❌'} {settings.evening_reminder.start_time}
+🍽 Обед: {'✅' if settings.lunch_reminder.enabled else '❌'} {settings.lunch_reminder.start_time}
+🧘 Перерыв: {'✅' if settings.break_reminder.enabled else '❌'} {settings.break_reminder.start_time}
+
+Используйте:
+/aurasettings enable <aura_name> [time]
+/aurasettings disable <aura_name>
+"""
+            await event.respond(message)
+            return
+        
+        command = args[1].lower()
+        
+        if command == 'enable' and len(args) >= 3:
+            aura_name = args[2].lower()
+            time_val = args[3] if len(args) > 3 else None
+            
+            valid_auras = ['emoji_status', 'bio_status', 'health_reminder', 'morning_greeting', 
+                          'evening_reminder', 'lunch_reminder', 'break_reminder']
+            
+            if aura_name not in valid_auras:
+                await event.respond(f"❌ Неизвестная аура. Доступные: {', '.join(valid_auras)}")
+                return
+            
+            await aura_settings_manager.update_aura(
+                event.chat_id, 
+                aura_name, 
+                enabled=True,
+                start_time=time_val
+            )
+            await event.respond(f"✅ Аура '{aura_name}' включена{' в ' + time_val if time_val else ''}")
+        
+        elif command == 'disable' and len(args) >= 3:
+            aura_name = args[2].lower()
+            
+            await aura_settings_manager.update_aura(event.chat_id, aura_name, enabled=False)
+            await event.respond(f"⏸️ Аура '{aura_name}' выключена")
+        
+        else:
+            await event.respond("""
+Используйте:
+/aurasettings — показать настройки
+/aurasettings enable <aura_name> [time] — включить
+/aurasettings disable <aura_name> — выключить
+
+Доступные ауры: emoji_status, bio_status, health_reminder, morning_greeting, evening_reminder, lunch_reminder, break_reminder
+""")
 
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):

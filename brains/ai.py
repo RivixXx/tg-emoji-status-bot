@@ -263,6 +263,45 @@ TOOLS = [
                 "properties": {}
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_my_memories",
+            "description": "Ищет в долговременной памяти факты, похожие на запрос. Используйте, когда нужно вспомнить ранее сохранённую информацию о пользователе.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Текст запроса для поиска в памяти"},
+                    "limit": {"type": "integer", "description": "Максимальное количество результатов", "default": 5}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_my_health_stats",
+            "description": "Получает детальную статистику здоровья (уколы, замеры) за указанный период. Используй, когда пользователь спрашивает о прогрессе, проценте выполнения.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "description": "Период в днях", "default": 7}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_my_active_reminders",
+            "description": "Показывает все активные напоминания пользователя. Используй, когда спрашивают 'какие у меня напоминания', 'что мне нужно сделать'.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
     }
 ]
 
@@ -370,6 +409,47 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
                         else:
                             names = ", ".join([emp['full_name'] for emp in celebrants])
                             tool_result = f"Да! Сегодня день рождения празднуют: {names}. 🥳 Не забудь поздравить!"
+
+                    elif func_name == "search_my_memories":
+                        from brains.mcp_tools import mcp_search_memories
+                        memories = await asyncio.wait_for(
+                            mcp_search_memories(
+                                args["query"],
+                                limit=args.get("limit", 5),
+                                user_id=chat_id
+                            ),
+                            timeout=10.0
+                        )
+                        if memories:
+                            tool_result = f"📚 Я вспомнила:\n{memories}"
+                        else:
+                            tool_result = "К сожалению, я не нашла ничего похожего в памяти. 🤔"
+
+                    elif func_name == "get_my_health_stats":
+                        from brains.mcp_tools import mcp_get_health_stats
+                        stats = await asyncio.wait_for(
+                            mcp_get_health_stats(user_id=chat_id, days=args.get("days", 7)),
+                            timeout=10.0
+                        )
+                        compliance = stats.get("compliance_rate", 0)
+                        tool_result = (
+                            f"📊 Статистика здоровья за {stats.get('period_days', 7)} дней:\n"
+                            f"✅ Подтверждено: {stats.get('confirmed', 0)}\n"
+                            f"❌ Пропущено: {stats.get('missed', 0)}\n"
+                            f"📈 Успешность: {compliance}%"
+                        )
+
+                    elif func_name == "list_my_active_reminders":
+                        from brains.mcp_tools import mcp_get_active_reminders
+                        reminders = await asyncio.wait_for(mcp_get_active_reminders(), timeout=10.0)
+                        if not reminders:
+                            tool_result = "📋 У тебя сейчас нет активных напоминаний. Отлично! 😊"
+                        else:
+                            lines = []
+                            for r in reminders:
+                                time_str = r.get("scheduled_time", "")[:16].replace("T", " ")
+                                lines.append(f"• {r.get('message', 'Напоминание')} ({time_str})")
+                            tool_result = f"🔔 Активные напоминания:\n" + "\n".join(lines)
                 except asyncio.TimeoutError:
                     tool_result = f"Таймаут выполнения инструмента {func_name}"
                     logger.error(f"⌛️ Tool timeout: {func_name}")

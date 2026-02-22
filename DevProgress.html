@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karina AI - Project Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/fontsource-inter@5.0.0/index.css" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+        
+        .glow-effect {
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+        }
+        
+        .feature-complete {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        
+        .feature-pending {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+        
+        .feature-planned {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        }
+        
+        .sidebar-gradient {
+            background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%);
+        }
+        
+        .stat-card {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid #667eea;
+            background: white;
+        }
+        
+        .timeline-item.completed::before {
+            background: #10b981;
+            border-color: #10b981;
+        }
+        
+        .timeline-item.in-progress::before {
+            background: #f59e0b;
+            border-color: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside class="sidebar-gradient w-64 min-h-screen p-6 fixed left-0 top-0">
+            <div class="flex items-center gap-3 mb-8">
+                <div class="w-12 h-12 rounded-full gradient-bg flex items-center justify-center glow-effect">
+                    <span class="text-xl">🤖</span>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold">Karina AI</h1>
+                    <p class="text-xs text-gray-400">Project Dashboard</p>
+                </div>
+            </div>
+            
+            <nav class="space-y-2">
+                <button onclick="showSection('overview')" class="nav-btn w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition flex items-center gap-3 bg-white/20">
+                    <span>📊</span>
+                    <span>Обзор</span>
+                </button>
+                <button onclick="showSection('features')" class="nav-btn w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition flex items-center gap-3">
+                    <span>✨</span>
+                    <span>Функции</span>
+                </button>
+                <button onclick="showSection('roadmap')" class="nav-btn w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition flex items-center gap-3">
+                    <span>🗺️</span>
+                    <span>Roadmap</span>
+                </button>
+                <button onclick="showSection('architecture')" class="nav-btn w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition flex items-center gap-3">
+                    <span>🏗️</span>
+                    <span>Архитектура</span>
+                </button>
+                <button onclick="showSection('metrics')" class="nav-btn w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition flex items-center gap-3">
+                    <span>📈</span>
+                    <span>Метрики</span>
+                </button>
+                <button onclick="showSection('suggestions')" class="nav-btn w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition flex items-center gap-3">
+                    <span>💡</span>
+                    <span>Идеи</span>
+                </button>
+            </nav>
+            
+            <div class="mt-8 pt-8 border-t border-white/10">
+                <div class="flex items-center gap-3 mb-4">
+                    <img src="https://image.qwenlm.ai/public_source/0590a3d7-afd2-4879-b98b-b70001243b8a/1fd064242-af5a-4329-b9cd-d28f604264e2.png" alt="Karina" class="w-10 h-10 rounded-full object-cover">
+                    <div>
+                        <p class="text-sm font-semibold">Karina AI</p>
+                        <p class="text-xs text-green-400">● Online</p>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-400">
+                    <p>Версия: 2.0</p>
+                    <p>Обновлено: Февраль 2026</p>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="ml-64 flex-1 p-8">
+            <!-- Overview Section -->
+            <section id="overview" class="section">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold mb-2">Обзор Проекта</h2>
+                    <p class="text-gray-400">Панель управления развитием Karina AI</p>
+                </div>
+                
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="stat-card rounded-2xl p-6 card-hover border border-white/10">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-3xl">✅</span>
+                            <span class="text-green-400 text-sm font-semibold">MVP Готов</span>
+                        </div>
+                        <h3 class="text-3xl font-bold mb-1">9</h3>
+                        <p class="text-gray-400 text-sm">Основных модулей</p>
+                        <div class="mt-4 h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div class="h-full feature-complete rounded-full" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 card-hover border border-white/10">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-3xl">📦</span>
+                            <span class="text-blue-400 text-sm font-semibold">В разработке</span>
+                        </div>
+                        <h3 class="text-3xl font-bold mb-1">12</h3>
+                        <p class="text-gray-400 text-sm">Планируемых функций</p>
+                        <div class="mt-4 h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div class="h-full feature-pending rounded-full" style="width: 35%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 card-hover border border-white/10">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-3xl">📝</span>
+                            <span class="text-purple-400 text-sm font-semibold">Код</span>
+                        </div>
+                        <h3 class="text-3xl font-bold mb-1">2500+</h3>
+                        <p class="text-gray-400 text-sm">Строк кода</p>
+                        <div class="mt-4 h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div class="h-full feature-planned rounded-full" style="width: 75%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 card-hover border border-white/10">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-3xl">🔧</span>
+                            <span class="text-orange-400 text-sm font-semibold">Интеграции</span>
+                        </div>
+                        <h3 class="text-3xl font-bold mb-1">7</h3>
+                        <p class="text-gray-400 text-sm">API подключений</p>
+                        <div class="mt-4 h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div class="h-full feature-complete rounded-full" style="width: 85%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <div class="stat-card rounded-2xl p-6 border border-white/10">
+                        <h3 class="text-xl font-bold mb-4">🎯 Приоритеты Q1 2026</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3 p-3 bg-red-500/20 rounded-lg border border-red-500/30">
+                                <span class="text-2xl"></span>
+                                <div class="flex-1">
+                                    <p class="font-semibold">TTS (синтез речи)</p>
+                                    <p class="text-xs text-gray-400">Голосовые ответы Карины</p>
+                                </div>
+                                <span class="text-xs bg-red-500 px-2 py-1 rounded">Высокий</span>
+                            </div>
+                            <div class="flex items-center gap-3 p-3 bg-red-500/20 rounded-lg border border-red-500/30">
+                                <span class="text-2xl">🔴</span>
+                                <div class="flex-1">
+                                    <p class="font-semibold">Smart Summary</p>
+                                    <p class="text-xs text-gray-400">Еженедельные отчёты</p>
+                                </div>
+                                <span class="text-xs bg-red-500 px-2 py-1 rounded">Высокий</span>
+                            </div>
+                            <div class="flex items-center gap-3 p-3 bg-red-500/20 rounded-lg border border-red-500/30">
+                                <span class="text-2xl">🔴</span>
+                                <div class="flex-1">
+                                    <p class="font-semibold">Настройки Аур</p>
+                                    <p class="text-xs text-gray-400">Кастомизация напоминаний</p>
+                                </div>
+                                <span class="text-xs bg-red-500 px-2 py-1 rounded">Высокий</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10">
+                        <h3 class="text-xl font-bold mb-4">📊 Прогресс Разработки</h3>
+                        <canvas id="progressChart" height="200"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Technology Stack -->
+                <div class="stat-card rounded-2xl p-6 border border-white/10">
+                    <h3 class="text-xl font-bold mb-4">🛠 Технологический Стек</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                        <div class="text-center p-4 bg-white/5 rounded-lg">
+                            <span class="text-3xl mb-2 block">🐍</span>
+                            <p class="text-sm font-semibold">Python</p>
+                            <p class="text-xs text-gray-400">3.10+</p>
+                        </div>
+                        <div class="text-center p-4 bg-white/5 rounded-lg">
+                            <span class="text-3xl mb-2 block">⚡</span>
+                            <p class="text-sm font-semibold">Telethon</p>
+                            <p class="text-xs text-gray-400">Telegram API</p>
+                        </div>
+                        <div class="text-center p-4 bg-white/5 rounded-lg">
+                            <span class="text-3xl mb-2 block">🌐</span>
+                            <p class="text-sm font-semibold">Quart</p>
+                            <p class="text-xs text-gray-400">ASGI Web</p>
+                        </div>
+                        <div class="text-center p-4 bg-white/5 rounded-lg">
+                            <span class="text-3xl mb-2 block">🗄️</span>
+                            <p class="text-sm font-semibold">Supabase</p>
+                            <p class="text-xs text-gray-400">PostgreSQL</p>
+                        </div>
+                        <div class="text-center p-4 bg-white/5 rounded-lg">
+                            <span class="text-3xl mb-2 block">🤖</span>
+                            <p class="text-sm font-semibold">Mistral AI</p>
+                            <p class="text-xs text-gray-400">LLM API</p>
+                        </div>
+                        <div class="text-center p-4 bg-white/5 rounded-lg">
+                            <span class="text-3xl mb-2 block">📅</span>
+                            <p class="text-sm font-semibold">Google</p>
+                            <p class="text-xs text-gray-400">Calendar API</p>
+                        </div>
+                        <div class="text-center p-4 bg-white/5 rounded-lg">
+                            <span class="text-3xl mb-2 block">⚛️</span>
+                            <p class="text-sm font-semibold">React</p>
+                            <p class="text-xs text-gray-400">Mini App</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Features Section -->
+            <section id="features" class="section hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold mb-2">Функционал</h2>
+                    <p class="text-gray-400">Все возможности Karina AI</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Feature Cards -->
+                    <div class="stat-card rounded-2xl p-6 border border-white/10 card-hover">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-3xl">🧠</span>
+                            <h3 class="text-lg font-bold">Интеллектуальные Мозги</h3>
+                        </div>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Mistral AI API
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Function Calling
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Системный промт 100+ строк
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Живой стиль общения
+                            </li>
+                        </ul>
+                        <div class="mt-4 pt-4 border-t border-white/10">
+                            <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Готово</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10 card-hover">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-3xl">💾</span>
+                            <h3 class="text-lg font-bold">Долговременная Память</h3>
+                        </div>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                RAG + Supabase pgvector
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Векторный поиск
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Команда /remember
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Самообучение save_to_memory
+                            </li>
+                        </ul>
+                        <div class="mt-4 pt-4 border-t border-white/10">
+                            <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Готово</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10 card-hover">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-3xl">📅</span>
+                            <h3 class="text-lg font-bold">Google Calendar</h3>
+                        </div>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Чтение встреч
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Создание событий
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Проверка конфликтов
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Кэширование TTL 5 мин
+                            </li>
+                        </ul>
+                        <div class="mt-4 pt-4 border-t border-white/10">
+                            <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Готово</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10 card-hover">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-3xl">🎤</span>
+                            <h3 class="text-lg font-bold">Голосовое Управление</h3>
+                        </div>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                STT через Whisper
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Hugging Face API
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Конвертация в текст
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-yellow-400">◐</span>
+                                TTS в разработке
+                            </li>
+                        </ul>
+                        <div class="mt-4 pt-4 border-t border-white/10">
+                            <span class="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded">В работе</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10 card-hover">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-3xl">🌀</span>
+                            <h3 class="text-lg font-bold">Система Аур</h3>
+                        </div>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Emoji-статус авто
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Динамическое БИО
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Утренний брифинг
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Забота о здоровье
+                            </li>
+                        </ul>
+                        <div class="mt-4 pt-4 border-t border-white/10">
+                            <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Готово</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10 card-hover">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-3xl">📱</span>
+                            <h3 class="text-lg font-bold">Telegram Mini App</h3>
+                        </div>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                3D-панель управления
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Эмоциональный движок
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Health Dashboard
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-yellow-400">◐</span>
+                                3D Аватар в планах
+                            </li>
+                        </ul>
+                        <div class="mt-4 pt-4 border-t border-white/10">
+                            <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Готово</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10 card-hover">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-3xl">🔔</span>
+                            <h3 class="text-lg font-bold">Умные Напоминания</h3>
+                        </div>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Здоровье 22:00
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Встречи за 15 мин
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Обед 13:00
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Эскалация 4 уровня
+                            </li>
+                        </ul>
+                        <div class="mt-4 pt-4 border-t border-white/10">
+                            <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Готово</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10 card-hover">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-3xl">🛠</span>
+                            <h3 class="text-lg font-bold">Надёжность</h3>
+                        </div>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Retry-логика API
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Обработка ошибок
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Детальное логирование
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Защита от дублей
+                            </li>
+                        </ul>
+                        <div class="mt-4 pt-4 border-t border-white/10">
+                            <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Готово</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10 card-hover">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-3xl">🏠</span>
+                            <h3 class="text-lg font-bold">Домашний Сервер</h3>
+                        </div>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Ubuntu 22.04
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Docker Compose
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Авто-деплой скрипт
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Systemd запуск
+                            </li>
+                        </ul>
+                        <div class="mt-4 pt-4 border-t border-white/10">
+                            <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Готово</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Roadmap Section -->
+            <section id="roadmap" class="section hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold mb-2">Roadmap</h2>
+                    <p class="text-gray-400">План развития проекта</p>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <!-- Q1 2026 -->
+                    <div class="stat-card rounded-2xl p-6 border border-red-500/30">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-2xl">🔴</span>
+                            <h3 class="text-xl font-bold">Q1 2026</h3>
+                            <span class="text-xs bg-red-500 px-2 py-1 rounded">Высокий</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="font-semibold mb-1">TTS (синтез речи)</p>
+                                <p class="text-xs text-gray-400">Голосовые ответы Карины</p>
+                                <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-yellow-500 rounded-full" style="width: 30%"></div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="font-semibold mb-1">Smart Summary</p>
+                                <p class="text-xs text-gray-400">Еженедельные отчёты</p>
+                                <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gray-600 rounded-full" style="width: 10%"></div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="font-semibold mb-1">Настройки Аур</p>
+                                <p class="text-xs text-gray-400">Кастомизация напоминаний</p>
+                                <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gray-600 rounded-full" style="width: 15%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Q2 2026 -->
+                    <div class="stat-card rounded-2xl p-6 border border-yellow-500/30">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-2xl">🟡</span>
+                            <h3 class="text-xl font-bold">Q2 2026</h3>
+                            <span class="text-xs bg-yellow-500 px-2 py-1 rounded">Средний</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="font-semibold mb-1">3D Аватар</p>
+                                <p class="text-xs text-gray-400">Визуализация в Mini App</p>
+                                <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gray-600 rounded-full" style="width: 5%"></div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="font-semibold mb-1">Vision</p>
+                                <p class="text-xs text-gray-400">Анализ изображений</p>
+                                <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gray-600 rounded-full" style="width: 5%"></div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="font-semibold mb-1">Безопасность Mini App</p>
+                                <p class="text-xs text-gray-400">Telegram Hash валидация</p>
+                                <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gray-600 rounded-full" style="width: 10%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Q3+ 2026 -->
+                    <div class="stat-card rounded-2xl p-6 border border-green-500/30">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-2xl">🟢</span>
+                            <h3 class="text-xl font-bold">Q3+ 2026</h3>
+                            <span class="text-xs bg-green-500 px-2 py-1 rounded">Низкий</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="font-semibold mb-1">Телематика</p>
+                                <p class="text-xs text-gray-400">Интеграция Wialon/Navixy</p>
+                                <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gray-600 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="font-semibold mb-1">Умный дом</p>
+                                <p class="text-xs text-gray-400">Управление устройствами</p>
+                                <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gray-600 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="font-semibold mb-1">Мультипользователь</p>
+                                <p class="text-xs text-gray-400">Поддержка нескольких юзеров</p>
+                                <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gray-600 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Timeline -->
+                <div class="stat-card rounded-2xl p-6 border border-white/10">
+                    <h3 class="text-xl font-bold mb-6">📅 Временная Шкала</h3>
+                    <div class="relative pl-8 space-y-6">
+                        <div class="timeline-item completed relative pb-6">
+                            <div class="absolute left-0 top-0 w-px h-full bg-green-500"></div>
+                            <div class="ml-4">
+                                <p class="text-sm text-green-400 font-semibold">Февраль 2026</p>
+                                <h4 class="font-bold">MVP Завершён</h4>
+                                <p class="text-sm text-gray-400">Все 9 основных модулей готовы к продакшену</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item in-progress relative pb-6">
+                            <div class="absolute left-0 top-0 w-px h-full bg-yellow-500"></div>
+                            <div class="ml-4">
+                                <p class="text-sm text-yellow-400 font-semibold">Март 2026</p>
+                                <h4 class="font-bold">TTS Интеграция</h4>
+                                <p class="text-sm text-gray-400">Добавление синтеза речи для голосовых ответов</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item relative pb-6">
+                            <div class="absolute left-0 top-0 w-px h-full bg-gray-600"></div>
+                            <div class="ml-4">
+                                <p class="text-sm text-gray-400 font-semibold">Апрель 2026</p>
+                                <h4 class="font-bold">Smart Summary</h4>
+                                <p class="text-sm text-gray-400">Еженедельные отчёты о продуктивности</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item relative pb-6">
+                            <div class="absolute left-0 top-0 w-px h-full bg-gray-600"></div>
+                            <div class="ml-4">
+                                <p class="text-sm text-gray-400 font-semibold">Май 2026</p>
+                                <h4 class="font-bold">Настройки Аур</h4>
+                                <p class="text-sm text-gray-400">Кастомизация напоминаний через интерфейс</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item relative">
+                            <div class="absolute left-0 top-0 w-px h-full bg-gray-600"></div>
+                            <div class="ml-4">
+                                <p class="text-sm text-gray-400 font-semibold">Июнь 2026+</p>
+                                <h4 class="font-bold">3D Аватар & Vision</h4>
+                                <p class="text-sm text-gray-400">Визуальная эволюция и анализ изображений</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Architecture Section -->
+            <section id="architecture" class="section hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold mb-2">Архитектура</h2>
+                    <p class="text-gray-400">Схема системы Karina AI</p>
+                </div>
+                
+                <div class="stat-card rounded-2xl p-6 border border-white/10 mb-8">
+                    <h3 class="text-xl font-bold mb-6">🏗️ Общая Схема</h3>
+                    <div class="bg-gray-800 rounded-xl p-6 overflow-x-auto">
+                        <pre class="text-xs text-green-400 font-mono whitespace-pre">
+┌─────────────────────────────────────────────────────┐
+│         Railway / Домашний сервер (Ubuntu)          │
+│                                                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐ │
+│  │   Bot Thread │  │ UserBot Thread│  │ Web Thread│ │
+│  │  (messages)  │  │  (emoji status)│  │  (Quart)  │ │
+│  │              │  │               │  │           │ │
+│  │  - Handlers  │  │  - Aura Loop  │  │ - Mini App│ │
+│  │  - Commands  │  │  - Emoji API  │  │ - API     │ │
+│  └──────┬───────┘  └───────┬───────┘  └─────┬─────┘ │
+│         │                   │                 │       │
+│         └───────────────────┴─────────────────┘       │
+│                          │                            │
+│              ┌───────────┴───────────┐                │
+│              │   asyncio.gather()    │                │
+│              └───────────────────────┘                │
+└─────────────────────────────────────────────────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         │               │               │
+    ┌────▼────┐    ┌────▼────┐    ┌────▼────┐
+    │ Telegram│    │ Mistral │    │Supabase │
+    │   API   │    │   AI    │    │  (RAG)  │
+    └─────────┘    └─────────┘    └─────────┘
+                        </pre>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="stat-card rounded-2xl p-6 border border-white/10">
+                        <h3 class="text-xl font-bold mb-4">📦 Модульная Структура</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                <span class="font-semibold">brains/</span>
+                                <span class="text-xs text-gray-400">9 модулей</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                <span class="font-semibold">auras/</span>
+                                <span class="text-xs text-gray-400">2 модуля</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                <span class="font-semibold">skills/</span>
+                                <span class="text-xs text-gray-400">1 модуль</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                <span class="font-semibold">static/</span>
+                                <span class="text-xs text-gray-400">Frontend React</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                <span class="font-semibold">docs/</span>
+                                <span class="text-xs text-gray-400">Документация</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10">
+                        <h3 class="text-xl font-bold mb-4">🔄 Поток Данных</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-start gap-3">
+                                <span class="text-2xl">👤</span>
+                                <div>
+                                    <p class="font-semibold">Пользователь</p>
+                                    <p class="text-xs text-gray-400">Telegram / Mini App</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 text-gray-500">
+                                <span>↓</span>
+                                <span class="text-xs">HTTP / WebSocket</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-2xl">🤖</span>
+                                <div>
+                                    <p class="font-semibold">Bot Thread</p>
+                                    <p class="text-xs text-gray-400">Обработка сообщений</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 text-gray-500">
+                                <span>↓</span>
+                                <span class="text-xs">Function Calling</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-2xl">🧠</span>
+                                <div>
+                                    <p class="font-semibold">Mistral AI</p>
+                                    <p class="text-xs text-gray-400">Генерация ответа + RAG</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 text-gray-500">
+                                <span>↓</span>
+                                <span class="text-xs">API Response</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-2xl">👤</span>
+                                <div>
+                                    <p class="font-semibold">Пользователь</p>
+                                    <p class="text-xs text-gray-400">Получает ответ</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Metrics Section -->
+            <section id="metrics" class="section hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold mb-2">Метрики</h2>
+                    <p class="text-gray-400">Производительность и статистика</p>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <div class="stat-card rounded-2xl p-6 border border-white/10">
+                        <h3 class="text-xl font-bold mb-4">⚡ Время Отклика</h3>
+                        <canvas id="responseTimeChart" height="200"></canvas>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-white/10">
+                        <h3 class="text-xl font-bold mb-4">📊 Распределение Функций</h3>
+                        <canvas id="featuresChart" height="200"></canvas>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="stat-card rounded-xl p-4 border border-white/10 text-center">
+                        <p class="text-3xl font-bold text-blue-400">2-5с</p>
+                        <p class="text-xs text-gray-400 mt-1">Время ответа AI</p>
+                    </div>
+                    <div class="stat-card rounded-xl p-4 border border-white/10 text-center">
+                        <p class="text-3xl font-bold text-green-400">1-2с</p>
+                        <p class="text-xs text-gray-400 mt-1">RAG поиск</p>
+                    </div>
+                    <div class="stat-card rounded-xl p-4 border border-white/10 text-center">
+                        <p class="text-3xl font-bold text-purple-400">5мин</p>
+                        <p class="text-xs text-gray-400 mt-1">TTL кэша</p>
+                    </div>
+                    <div class="stat-card rounded-xl p-4 border border-white/10 text-center">
+                        <p class="text-3xl font-bold text-orange-400">60с</p>
+                        <p class="text-xs text-gray-400 mt-1">Проверка аур</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Suggestions Section -->
+            <section id="suggestions" class="section hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold mb-2">💡 Идеи для Развития</h2>
+                    <p class="text-gray-400">Рекомендации по улучшению проекта</p>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <div class="stat-card rounded-2xl p-6 border border-green-500/30">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-2xl">🎯</span>
+                            <h3 class="text-xl font-bold text-green-400">Быстрые Победы</h3>
+                        </div>
+                        <ul class="space-y-3">
+                            <li class="flex items-start gap-3">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <div>
+                                    <p class="font-semibold">Unit-тесты</p>
+                                    <p class="text-xs text-gray-400">Покрыть тестами brains модули для стабильности</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <div>
+                                    <p class="font-semibold">Конфигурация</p>
+                                    <p class="text-xs text-gray-400">Вынести все настройки в отдельный config модуль</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <div>
+                                    <p class="font-semibold">Docker локальный</p>
+                                    <p class="text-xs text-gray-400">Dockerfile для тестирования без сервера</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <div>
+                                    <p class="font-semibold">Мониторинг</p>
+                                    <p class="text-xs text-gray-400">Добавить Prometheus/Grafana для метрик</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="stat-card rounded-2xl p-6 border border-blue-500/30">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-2xl">🚀</span>
+                            <h3 class="text-xl font-bold text-blue-400">Новые Функции</h3>
+                        </div>
+                        <ul class="space-y-3">
+                            <li class="flex items-start gap-3">
+                                <span class="text-blue-400 mt-1">→</span>
+                                <div>
+                                    <p class="font-semibold">Режим Совещания</p>
+                                    <p class="text-xs text-gray-400">Авто-статус при активных встречах в календаре</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="text-blue-400 mt-1">→</span>
+                                <div>
+                                    <p class="font-semibold">Трекер Питания</p>
+                                    <p class="text-xs text-gray-400">Vision-анализ еды по фото с подсчётом калорий</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="text-blue-400 mt-1">→</span>
+                                <div>
+                                    <p class="font-semibold">Эмоциональный Резонанс</p>
+                                    <p class="text-xs text-gray-400">Подстройка стиля общения под настроение пользователя</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="text-blue-400 mt-1">→</span>
+                                <div>
+                                    <p class="font-semibold">Анализ Переработок</p>
+                                    <p class="text-xs text-gray-400">Детектор работы после 22:00 и в выходные</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="stat-card rounded-2xl p-6 border border-white/10">
+                    <h3 class="text-xl font-bold mb-6">📋 Детальные Рекомендации</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-white/10">
+                                    <th class="text-left py-3 px-4">Категория</th>
+                                    <th class="text-left py-3 px-4">Рекомендация</th>
+                                    <th class="text-left py-3 px-4">Сложность</th>
+                                    <th class="text-left py-3 px-4">Приоритет</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4">🔧 Архитектура</td>
+                                    <td class="py-3 px-4">Добавить WebSocket для real-time обновлений Mini App</td>
+                                    <td class="py-3 px-4"><span class="text-yellow-400">Средняя</span></td>
+                                    <td class="py-3 px-4"><span class="text-green-400">Высокий</span></td>
+                                </tr>
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4">🔐 Безопасность</td>
+                                    <td class="py-3 px-4">Валидация Telegram Hash для Mini App входа</td>
+                                    <td class="py-3 px-4"><span class="text-green-400">Низкая</span></td>
+                                    <td class="py-3 px-4"><span class="text-green-400">Высокий</span></td>
+                                </tr>
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4">📊 Аналитика</td>
+                                    <td class="py-3 px-4">Еженедельный Smart Summary отчёт пользователю</td>
+                                    <td class="py-3 px-4"><span class="text-yellow-400">Средняя</span></td>
+                                    <td class="py-3 px-4"><span class="text-green-400">Высокий</span></td>
+                                </tr>
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4">🎤 Голос</td>
+                                    <td class="py-3 px-4">TTS через ElevenLabs или Silero для русских голосовых</td>
+                                    <td class="py-3 px-4"><span class="text-red-400">Высокая</span></td>
+                                    <td class="py-3 px-4"><span class="text-green-400">Высокий</span></td>
+                                </tr>
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4">🖼️ Визуал</td>
+                                    <td class="py-3 px-4">3D аватар с Three.js в Mini App (анимация дыхания)</td>
+                                    <td class="py-3 px-4"><span class="text-red-400">Высокая</span></td>
+                                    <td class="py-3 px-4"><span class="text-yellow-400">Средний</span></td>
+                                </tr>
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4">👁️ Vision</td>
+                                    <td class="py-3 px-4">Анализ фото через Mistral Vision API (анализы, документы)</td>
+                                    <td class="py-3 px-4"><span class="text-yellow-400">Средняя</span></td>
+                                    <td class="py-3 px-4"><span class="text-yellow-400">Средний</span></td>
+                                </tr>
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4">🏠 Интеграции</td>
+                                    <td class="py-3 px-4">Wialon/Navixy API для телематики транспорта</td>
+                                    <td class="py-3 px-4"><span class="text-red-400">Высокая</span></td>
+                                    <td class="py-3 px-4"><span class="text-gray-400">Низкий</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-4">👥 Масштаб</td>
+                                    <td class="py-3 px-4">Мультипользовательский режим с изоляцией данных</td>
+                                    <td class="py-3 px-4"><span class="text-red-400">Высокая</span></td>
+                                    <td class="py-3 px-4"><span class="text-gray-400">Низкий</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="mt-8 stat-card rounded-2xl p-6 border border-purple-500/30">
+                    <h3 class="text-xl font-bold mb-4">🎁 Бонус: Идеи для Монетизации</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="p-4 bg-white/5 rounded-lg">
+                            <p class="font-semibold mb-2">💎 Premium Функции</p>
+                            <p class="text-xs text-gray-400">Расширенные отчёты, больше памяти, приоритетная обработка</p>
+                        </div>
+                        <div class="p-4 bg-white/5 rounded-lg">
+                            <p class="font-semibold mb-2">🏢 Корпоративная Версия</p>
+                            <p class="text-xs text-gray-400">Командный календарь, интеграция с CRM, аналитика</p>
+                        </div>
+                        <div class="p-4 bg-white/5 rounded-lg">
+                            <p class="font-semibold mb-2">🔌 API Доступ</p>
+                            <p class="text-xs text-gray-400">Предоставление API для сторонних разработчиков</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script>
+        // Section Navigation
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-white/20');
+            });
+            event.currentTarget.classList.add('bg-white/20');
+        }
+        
+        // Progress Chart
+        const progressCtx = document.getElementById('progressChart').getContext('2d');
+        new Chart(progressCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Готово', 'В работе', 'Планы'],
+                datasets: [{
+                    data: [9, 3, 12],
+                    backgroundColor: ['#10b981', '#f59e0b', '#6366f1'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: 'white' }
+                    }
+                }
+            }
+        });
+        
+        // Response Time Chart
+        const responseCtx = document.getElementById('responseTimeChart').getContext('2d');
+        new Chart(responseCtx, {
+            type: 'bar',
+            data: {
+                labels: ['AI Ответ', 'RAG Поиск', 'Calendar', 'Напоминания', 'Mini App'],
+                datasets: [{
+                    label: 'Время (сек)',
+                    data: [3.5, 1.5, 2, 0.5, 1],
+                    backgroundColor: ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: 'white' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: 'white' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+        
+        // Features Chart
+        const featuresCtx = document.getElementById('featuresChart').getContext('2d');
+        new Chart(featuresCtx, {
+            type: 'pie',
+            data: {
+                labels: ['AI/ML', 'Интеграции', 'UI/UX', 'Надёжность', 'Автоматизация'],
+                datasets: [{
+                    data: [25, 20, 20, 15, 20],
+                    backgroundColor: ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: 'white' }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

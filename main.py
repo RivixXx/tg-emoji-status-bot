@@ -24,6 +24,7 @@ from brains.news import get_latest_news
 from brains.ai import ask_karina
 from auras import state, start_auras
 from skills import register_karina_base_skills
+from plugins import plugin_manager
 
 # Настройка логирования
 logging.basicConfig(
@@ -137,7 +138,7 @@ async def api_emotion():
     auth = request.headers.get("X-Karina-Secret")
     if request.method == 'POST' and auth != os.environ.get("KARINA_API_SECRET"):
         return jsonify({"error": "Unauthorized"}), 401
-        
+
     if request.method == 'POST':
         data = await request.get_json()
         if data.get('emotion'):
@@ -145,6 +146,61 @@ async def api_emotion():
         return await get_emotion_state()
     return await get_emotion_state()
 
+
+# ========== API ПЛАГИНОВ ==========
+
+@app.route('/api/plugins', methods=['GET'])
+async def api_plugins_list():
+    """Получить список всех плагинов"""
+    return jsonify({
+        "plugins": plugin_manager.list_plugins()
+    })
+
+@app.route('/api/plugins/<plugin_name>/enable', methods=['POST'])
+async def api_plugin_enable(plugin_name):
+    """Включить плагин"""
+    auth = request.headers.get("X-Karina-Secret")
+    if auth != os.environ.get("KARINA_API_SECRET"):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    success = plugin_manager.enable_plugin(plugin_name)
+    if success:
+        return jsonify({"status": "ok", "message": f"Плагин {plugin_name} включен"})
+    return jsonify({"error": f"Плагин {plugin_name} не найден"}), 404
+
+@app.route('/api/plugins/<plugin_name>/disable', methods=['POST'])
+async def api_plugin_disable(plugin_name):
+    """Выключить плагин"""
+    auth = request.headers.get("X-Karina-Secret")
+    if auth != os.environ.get("KARINA_API_SECRET"):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    success = plugin_manager.disable_plugin(plugin_name)
+    if success:
+        return jsonify({"status": "ok", "message": f"Плагин {plugin_name} выключен"})
+    return jsonify({"error": f"Плагин {plugin_name} не найден"}), 404
+
+@app.route('/api/plugins/<plugin_name>/settings', methods=['GET', 'POST'])
+async def api_plugin_settings(plugin_name):
+    """Получить или обновить настройки плагина"""
+    auth = request.headers.get("X-Karina-Secret")
+    if request.method == 'POST' and auth != os.environ.get("KARINA_API_SECRET"):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    plugin = plugin_manager.get_plugin(plugin_name)
+    if not plugin:
+        return jsonify({"error": f"Плагин {plugin_name} не найден"}), 404
+    
+    if request.method == 'POST':
+        data = await request.get_json()
+        if data:
+            plugin.update_settings(data)
+            plugin_manager.save_config()
+        return jsonify({"status": "ok", "settings": plugin.get_settings()})
+    
+    return jsonify({"settings": plugin.get_settings()})
+
+# =================================
 # ========== КЛИЕНТЫ ==========
 
 bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
@@ -170,6 +226,7 @@ async def run_bot_main():
         types.BotCommand("weather", "Погода 🌤"),
         types.BotCommand("news", "Новости 🗞"),
         types.BotCommand("remember", "Запомнить факт ✍️"),
+        types.BotCommand("summary", "Еженедельный отчёт 📊"),
     ]
     await bot_client(functions.bots.SetBotCommandsRequest(
         scope=types.BotCommandScopeDefault(), lang_code='ru', commands=commands
@@ -309,10 +366,26 @@ async def run_web():
 async def amain():
     """Главная асинхронная точка входа"""
     logger.info("🔧 Запуск Karina AI (Unified Loop)...")
-    
+
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: SHUTDOWN_EVENT.set())
+
+    # ========== ИНИЦИАЛИЗАЦИЯ ПЛАГИНОВ ==========
+    logger.info("📦 Инициализация системы плагинов...")
+    plugin_manager.load_config()
+    
+    # Находим и загружаем все доступные плагины
+    discovered = plugin_manager.discover_plugins()
+    for plugin_name in discovered:
+        plugin = plugin_manager.load_plugin(plugin_name)
+        if plugin:
+            plugin_manager.register_plugin(plugin)
+    
+    # Инициализируем включенные плагины
+    await plugin_manager.initialize_all()
+    logger.info(f"✅ Загружено {len(plugin_manager.get_enabled_plugins())} активных плагинов")
+    # ===========================================
 
     bot_supervisor = asyncio.create_task(component_supervisor(run_bot_main, "bot"))
     user_supervisor = asyncio.create_task(component_supervisor(run_userbot_main, "userbot"))
@@ -332,13 +405,17 @@ async def amain():
     finally:
         logger.info("🔌 Завершение работы...")
         SHUTDOWN_EVENT.set()
-        
+
+        # Остановка плагинов
+        await plugin_manager.shutdown_all_hooks()
+        await plugin_manager.shutdown_all()
+
         sh_task.cancel()
         await asyncio.gather(bot_supervisor, user_supervisor, sh_task, return_exceptions=True)
-        
+
         if bot_client.is_connected(): await bot_client.disconnect()
         if user_client.is_connected(): await user_client.disconnect()
-        
+
         logger.info("👋 Karina AI остановлена.")
 
 if __name__ == '__main__':

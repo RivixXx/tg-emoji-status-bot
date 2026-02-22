@@ -10,7 +10,6 @@
 import asyncio
 import logging
 import json
-import httpx
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Callable
 from dataclasses import dataclass, field
@@ -19,14 +18,12 @@ import random
 
 from telethon import types
 from brains.reminder_generator import get_or_generate_reminder
-from brains.config import SUPABASE_URL, SUPABASE_KEY
+from brains.clients import supabase_client
 from brains.weather import get_weather
 from brains.news import get_latest_news
 from brains.calendar import get_upcoming_events
 
 logger = logging.getLogger(__name__)
-
-SUPABASE_REST_URL = f"{SUPABASE_URL}/rest/v1/reminders"
 
 class ReminderType(Enum):
     HEALTH = "health"
@@ -110,47 +107,45 @@ class ReminderManager:
 
     async def _save_to_db(self, reminder: Reminder):
         """Сохраняет состояние напоминания в Supabase (Upsert)"""
-        headers = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates"
-        }
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(SUPABASE_REST_URL, json=reminder.to_dict(), headers=headers)
-                if response.status_code not in [201, 204, 200]:
-                    logger.error(f"❌ Supabase Reminder Save Error: {response.status_code}")
+            data = reminder.to_dict()
+            
+            # Upsert: вставляем или обновляем существующую запись
+            response = supabase_client.table("reminders").upsert(data, on_conflict="id").execute()
+            
+            if response.data:
+                logger.debug(f"💾 Reminder saved: {reminder.id}")
+            else:
+                logger.error(f"❌ Supabase Reminder Save Error: {response}")
         except Exception as e:
             logger.error(f"❌ Failed to save reminder to DB: {e}")
 
     async def load_active_reminders(self):
         """Загружает активные напоминания из базы при старте"""
-        headers = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}"
-        }
         try:
-            async with httpx.AsyncClient() as client:
-                url = f"{SUPABASE_REST_URL}?is_active=eq.true"
-                response = await client.get(url, headers=headers)
-                if response.status_code == 200:
-                    data = response.json()
-                    for r_data in data:
-                        reminder = Reminder(
-                            id=r_data["id"],
-                            type=ReminderType(r_data["type"]),
-                            message=r_data["message"],
-                            scheduled_time=datetime.fromisoformat(r_data["scheduled_time"].replace('Z', '+00:00')),
-                            escalate_after=r_data["escalate_after"],
-                            current_level=EscalationLevel(r_data["current_level"]),
-                            is_active=r_data["is_active"],
-                            is_confirmed=r_data["is_confirmed"],
-                            snooze_until=datetime.fromisoformat(r_data["snooze_until"].replace('Z', '+00:00')) if r_data["snooze_until"] else None,
-                            context=r_data["context"]
-                        )
-                        self.reminders[reminder.id] = reminder
-                    logger.info(f"💾 Загружено {len(self.reminders)} активных напоминаний из БД")
+            response = supabase_client.table("reminders")\
+                .select("*")\
+                .eq("is_active", True)\
+                .execute()
+            
+            if response.data:
+                for r_data in response.data:
+                    reminder = Reminder(
+                        id=r_data["id"],
+                        type=ReminderType(r_data["type"]),
+                        message=r_data["message"],
+                        scheduled_time=datetime.fromisoformat(r_data["scheduled_time"].replace('+00:00', '+00:00')),
+                        escalate_after=r_data.get("escalate_after", [10, 30, 60]),
+                        current_level=EscalationLevel(r_data.get("current_level", "soft")),
+                        is_active=r_data.get("is_active", True),
+                        is_confirmed=r_data.get("is_confirmed", False),
+                        snooze_until=datetime.fromisoformat(r_data["snooze_until"].replace('+00:00', '+00:00')) if r_data.get("snooze_until") else None,
+                        context=r_data.get("context", {})
+                    )
+                    self.reminders[reminder.id] = reminder
+                logger.info(f"💾 Загружено {len(self.reminders)} активных напоминаний из БД")
+            else:
+                logger.info("💾 Активных напоминаний в БД не найдено")
         except Exception as e:
             logger.error(f"❌ Failed to load reminders from DB: {e}")
 

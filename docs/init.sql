@@ -60,6 +60,39 @@ BEGIN
 END;
 $$;
 
+-- Таблица для умных напоминаний
+CREATE TABLE IF NOT EXISTS reminders (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    scheduled_time TIMESTAMPTZ NOT NULL,
+    escalate_after JSONB DEFAULT '[]',
+    current_level TEXT DEFAULT 'soft',
+    is_active BOOLEAN DEFAULT true,
+    is_confirmed BOOLEAN DEFAULT false,
+    snooze_until TIMESTAMPTZ,
+    context JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Таблица для настроек аур
+CREATE TABLE IF NOT EXISTS aura_settings (
+    user_id BIGINT PRIMARY KEY,
+    settings JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Индексы для напоминаний
+CREATE INDEX IF NOT EXISTS idx_reminders_active ON reminders(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_reminders_scheduled ON reminders(scheduled_time) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_reminders_type ON reminders(type);
+
+-- Индексы для настроек аур
+CREATE INDEX IF NOT EXISTS idx_aura_settings_user ON aura_settings(user_id);
+
 -- Комментарии
 COMMENT ON TABLE health_records IS 'История напоминаний о здоровье (уколы, замеры)';
 COMMENT ON TABLE memories IS 'Векторная память для RAG (долговременная память Карины)';
+COMMENT ON TABLE reminders IS 'Умные напоминания с эскалацией и персистентностью';
