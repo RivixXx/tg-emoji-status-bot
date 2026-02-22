@@ -625,12 +625,283 @@ def register_karina_base_skills(client):
 
         raise events.StopPropagation
 
+    @client.on(events.NewMessage(pattern='/vision'))
+    async def vision_handler(event):
+        """Скилл: Анализ изображений (справка)"""
+        logger.info(f"📩 /vision от пользователя {event.chat_id}")
+
+        message = """
+👁️ **Компьютерное зрение Карины**
+
+**Отправить фото:**
+Просто отправь фото в чат — Карина автоматически проанализирует его!
+
+**Специальные команды:**
+`/ocr` — Распознать текст на фото
+`/analyze` — Детальный анализ изображения
+`/doc` — Анализ документа (паспорт, права, справка)
+`/receipt` — Анализ чека (товары, суммы)
+`/vision find <текст>` — Поиск по проанализированным фото
+
+**Что умеет Карина:**
+📝 Распознавать текст (OCR)
+📄 Анализировать документы
+🧾 Читать чеки и счета
+🖼️ Описывать фотографии
+🔍 Искать по проанализированным изображениям
+
+**Примеры:**
+1. Отправь фото документа → `/doc`
+2. Отправь фото чека → `/receipt`
+3. Отправь скриншот → `/analyze`
+"""
+        await event.respond(message)
+        raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/ocr'))
+    async def ocr_handler(event):
+        """Скилл: Распознавание текста на фото"""
+        logger.info(f"📩 /ocr от пользователя {event.chat_id}")
+
+        # Проверяем, есть ли фото в ответе
+        if not event.is_reply:
+            await event.respond("❌ Отправь команду в ответ на фото или просто отправь фото с подписью /ocr")
+            raise events.StopPropagation
+
+        reply = await event.get_reply_message()
+        if not (reply.photo or (reply.document and reply.document.mime_type.startswith('image/'))):
+            await event.respond("❌ Это не фото! Отправь /ocr в ответ на изображение")
+            raise events.StopPropagation
+
+        # Скачиваем и анализируем
+        photo_path = await reply.download_media(file="temp/vision/ocr_{}.jpg".format(datetime.now().strftime('%Y%m%d_%H%M%S')))
+        
+        if photo_path:
+            try:
+                await event.respond("🔍 Распознаю текст...")
+                
+                from brains.vision import ocr_image
+                result = await ocr_image(photo_path, user_id=event.chat_id)
+                
+                if result.get("success"):
+                    response = f"📝 **Распознанный текст:**\n\n```\n{result.get('text', 'Текст не найден')}\n```\n\n"
+                    
+                    if result.get("structured"):
+                        response += f"**Структура:**\n{result['structured']}"
+                    
+                    await event.respond(response, parse_mode='markdown')
+                else:
+                    await event.respond(f"❌ Ошибка: {result.get('error', 'Неизвестная ошибка')}")
+            
+            except Exception as e:
+                logger.error(f"OCR error: {e}")
+                await event.respond(f"❌ Ошибка OCR: {e}")
+            finally:
+                if os.path.exists(photo_path):
+                    os.remove(photo_path)
+        
+        raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/analyze'))
+    async def analyze_handler(event):
+        """Скилл: Детальный анализ изображения"""
+        logger.info(f"📩 /analyze от пользователя {event.chat_id}")
+
+        if not event.is_reply:
+            await event.respond("❌ Отправь команду в ответ на фото")
+            raise events.StopPropagation
+
+        reply = await event.get_reply_message()
+        if not (reply.photo or (reply.document and reply.document.mime_type.startswith('image/'))):
+            await event.respond("❌ Это не фото!")
+            raise events.StopPropagation
+
+        photo_path = await reply.download_media(file="temp/vision/analyze_{}.jpg".format(datetime.now().strftime('%Y%m%d_%H%M%S')))
+        
+        if photo_path:
+            try:
+                await event.respond("🔍 Анализирую изображение...")
+                
+                from brains.vision import analyze_photo_scene
+                result = await analyze_photo_scene(photo_path, user_id=event.chat_id)
+                
+                if result.get("success"):
+                    await event.respond(f"🖼️ **Анализ:**\n\n{result.get('description', result.get('full_analysis', 'Анализ не удался')}")
+                else:
+                    await event.respond(f"❌ Ошибка: {result.get('error', 'Неизвестная ошибка')}")
+            
+            except Exception as e:
+                logger.error(f"Analyze error: {e}")
+                await event.respond(f"❌ Ошибка анализа: {e}")
+            finally:
+                if os.path.exists(photo_path):
+                    os.remove(photo_path)
+        
+        raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/doc'))
+    async def doc_handler(event):
+        """Скилл: Анализ документа"""
+        logger.info(f"📩 /doc от пользователя {event.chat_id}")
+
+        if not event.is_reply:
+            await event.respond("❌ Отправь команду в ответ на фото документа")
+            raise events.StopPropagation
+
+        reply = await event.get_reply_message()
+        if not (reply.photo or (reply.document and reply.document.mime_type.startswith('image/'))):
+            await event.respond("❌ Это не фото!")
+            raise events.StopPropagation
+
+        photo_path = await reply.download_media(file="temp/vision/doc_{}.jpg".format(datetime.now().strftime('%Y%m%d_%H%M%S')))
+        
+        if photo_path:
+            try:
+                await event.respond("📄 Анализирую документ...")
+                
+                from brains.vision import analyze_document
+                result = await analyze_document(photo_path, user_id=event.chat_id)
+                
+                if result.get("success"):
+                    response = f"📄 **Тип:** {result.get('document_type', 'Не определён')}\n\n"
+                    response += f"**Данные:**\n{result.get('fields', 'Не удалось извлечь данные')}"
+                    
+                    await event.respond(response)
+                    
+                    # Предлагаем запомнить
+                    await event.respond("_Хочешь, я запомню важные данные из этого документа? Напиши `/remember` с нужной информацией._")
+                else:
+                    await event.respond(f"❌ Ошибка: {result.get('error', 'Неизвестная ошибка')}")
+            
+            except Exception as e:
+                logger.error(f"Doc analysis error: {e}")
+                await event.respond(f"❌ Ошибка анализа документа: {e}")
+            finally:
+                if os.path.exists(photo_path):
+                    os.remove(photo_path)
+        
+        raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/receipt'))
+    async def receipt_handler(event):
+        """Скилл: Анализ чека"""
+        logger.info(f"📩 /receipt от пользователя {event.chat_id}")
+
+        if not event.is_reply:
+            await event.respond("❌ Отправь команду в ответ на фото чека")
+            raise events.StopPropagation
+
+        reply = await event.get_reply_message()
+        if not (reply.photo or (reply.document and reply.document.mime_type.startswith('image/'))):
+            await event.respond("❌ Это не фото!")
+            raise events.StopPropagation
+
+        photo_path = await reply.download_media(file="temp/vision/receipt_{}.jpg".format(datetime.now().strftime('%Y%m%d_%H%M%S')))
+        
+        if photo_path:
+            try:
+                await event.respond("🧾 Анализирую чек...")
+                
+                from brains.vision import analyze_receipt
+                result = await analyze_receipt(photo_path, user_id=event.chat_id)
+                
+                if result.get("success"):
+                    await event.respond(f"🧾 **Анализ чека:**\n\n{result.get('full_analysis', 'Не удалось проанализировать чек')}")
+                else:
+                    await event.respond(f"❌ Ошибка: {result.get('error', 'Неизвестная ошибка')}")
+            
+            except Exception as e:
+                logger.error(f"Receipt analysis error: {e}")
+                await event.respond(f"❌ Ошибка анализа чека: {e}")
+            finally:
+                if os.path.exists(photo_path):
+                    os.remove(photo_path)
+        
+        raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/vision find'))
+    async def vision_find_handler(event):
+        """Скилл: Поиск по проанализированным фото"""
+        logger.info(f"📩 /vision find от пользователя {event.chat_id}")
+
+        args = event.text.split(maxsplit=2)
+        if len(args) < 3:
+            await event.respond("❌ Использование: `/vision find <запрос>`\n\nПример: `/vision find паспорт`")
+            raise events.StopPropagation
+
+        query = args[2]
+
+        from brains.vision import search_vision_history
+        results = await search_vision_history(event.chat_id, query, limit=5)
+
+        if not results:
+            await event.respond(f"🔍 Ничего не найдено по запросу \"{query}\"")
+            raise events.StopPropagation
+
+        message = f"🔍 **Найдено {len(results)} результатов:**\n\n"
+        for i, item in enumerate(results, 1):
+            analyzed = datetime.fromisoformat(item['analyzed_at'].replace('+00:00', '+00:00'))
+            message += f"{i}. **{analyzed.strftime('%d.%m.%Y %H:%M')}**\n"
+            message += f"   Файл: {item.get('original_filename', 'Н/Д')}\n"
+            message += f"   Запрос: {item.get('prompt', 'Н/Д')[:50]}...\n"
+            message += f"   Анализ: {item['analysis'][:150]}...\n\n"
+
+        if len(message) > 4000:
+            message = message[:4000] + "..."
+
+        await event.respond(message)
+        raise events.StopPropagation
+
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
-        """Интеллектуальное общение (текст + голос) + Обработка напоминаний"""
+        """Интеллектуальное общение (текст + голос + фото) + Обработка напоминаний"""
         logger.info(f"📩 Сообщение от {event.chat_id}: {event.text[:50] if event.text else 'no text'}")
-        
-        # Если пришло голосовое сообщение
+
+        # ========== ОБРАБОТКА ФОТО ==========
+        if event.photo or (event.document and event.document.mime_type.startswith('image/')):
+            logger.info(f"🖼️ Фото получено от {event.chat_id}")
+            if not event.is_private:
+                logger.info("⚠️ Пропуск (не личный чат)")
+                return
+
+            # Скачиваем фото
+            photo_path = await event.download_media(file="temp/vision/photo_{}.jpg".format(datetime.now().strftime('%Y%m%d_%H%M%S')))
+            
+            if photo_path:
+                try:
+                    # Отправляем статус "думает"
+                    async with client.action(event.chat_id, 'choose-sticker'):
+                        # Анализируем фото
+                        from brains.vision import analyze_image
+                        
+                        # Определяем тип анализа по контексту
+                        prompt = "Детально опиши что на этом изображении. Если есть текст — распиши его полностью."
+                        
+                        result = await analyze_image(photo_path, prompt, user_id=event.chat_id)
+                        
+                        if result.get("success"):
+                            # Формируем ответ
+                            response = f"🖼️ **Анализ изображения:**\n\n{result['description']}"
+                            
+                            # Если есть текст — добавляем
+                            if result.get("text_content"):
+                                response += "\n\n📝 **Распознанный текст:**\n_Карина может запомнить важную информацию из этого текста. Попроси меня!_"
+                            
+                            await event.respond(response, parse_mode='markdown')
+                        else:
+                            await event.respond(f"❌ Не удалось проанализировать фото: {result.get('error', 'Неизвестная ошибка')}")
+                
+                except Exception as e:
+                    logger.error(f"Photo analysis error: {e}")
+                    await event.respond("❌ Ошибка при анализе фото. Попробуй ещё раз!")
+                finally:
+                    # Удаляем временный файл
+                    if os.path.exists(photo_path):
+                        os.remove(photo_path)
+                
+                raise events.StopPropagation
+
+        # ========== ОБРАБОТКА ГОЛОСА ==========
         if event.voice or event.audio:
             logger.info(f"🎤 Голосовое сообщение от {event.chat_id}")
             if not event.is_private:

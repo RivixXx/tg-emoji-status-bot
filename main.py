@@ -290,6 +290,11 @@ async def run_bot_main():
         types.BotCommand("productivity", "Отчёт о продуктивности 📈"),
         types.BotCommand("workstats", "Статистика работы ⏰"),
         types.BotCommand("overwork", "Проверка переработок ⚠️"),
+        types.BotCommand("vision", "Компьютерное зрение 👁️"),
+        types.BotCommand("ocr", "Распознать текст на фото 📝"),
+        types.BotCommand("analyze", "Анализ изображения 🔍"),
+        types.BotCommand("doc", "Анализ документа 📄"),
+        types.BotCommand("receipt", "Анализ чека 🧾"),
     ]
     await bot_client(functions.bots.SetBotCommandsRequest(
         scope=types.BotCommandScopeDefault(), lang_code='ru', commands=commands
