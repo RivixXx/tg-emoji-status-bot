@@ -1,5 +1,5 @@
 # Auxiliary files
-# docs/ - removed from ignore to keep documentation in repo
+# docs/ - documentation is kept in repo
 
 # Python
 __pycache__/
@@ -12,7 +12,6 @@ build/
 develop-eggs/
 dist/
 downloads/
-docs/
 eggs/
 .eggs/
 lib/
@@ -28,5 +27,22 @@ wheels/
 # Virtual Environment
 venv/
 ENV/
+karina/
 
+# Environment variables
 .env
+
+# Temporary files
+temp/
+*.log
+bot.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

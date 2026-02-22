@@ -870,7 +870,7 @@ def register_karina_base_skills(client):
             if photo_path:
                 try:
                     # Отправляем статус "думает"
-                    async with client.action(event.chat_id, 'choose-sticker'):
+                    async with client.action(event.chat_id, 'typing'):
                         # Анализируем фото
                         from brains.vision import analyze_image
                         
