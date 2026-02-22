@@ -347,6 +347,103 @@ def register_karina_base_skills(client):
 
         await event.respond(message)
 
+    @client.on(events.NewMessage(pattern='/news'))
+    async def news_handler(event):
+        """Скилл: Свежие новости телематики"""
+        logger.info(f"📩 /news от пользователя {event.chat_id}")
+        
+        from brains.news import get_latest_news
+        
+        # Проверяем аргументы
+        args = event.text.split()
+        force_refresh = False
+        
+        if len(args) > 1 and args[1].lower() in ['force', 'fresh', 'обновить']:
+            force_refresh = True
+            await event.respond("🔄 Обновляю новости...")
+        
+        news = await get_latest_news(limit=5, force_refresh=force_refresh, user_id=event.chat_id)
+        await event.respond(news)
+
+    @client.on(events.NewMessage(pattern='/newsforce'))
+    async def news_force_handler(event):
+        """Скилл: Принудительное обновление новостей (очистка кэша)"""
+        logger.info(f"📩 /newsforce от пользователя {event.chat_id}")
+        
+        from brains.news import get_latest_news, clear_news_cache
+        
+        clear_news_cache()
+        await event.respond("🧹 Кэш новостей очищен. Загружаю свежие данные...")
+        
+        news = await get_latest_news(limit=5, force_refresh=True, user_id=event.chat_id)
+        await event.respond(news)
+
+    @client.on(events.NewMessage(pattern='/newssources'))
+    async def news_sources_handler(event):
+        """Скилл: Управление источниками новостей"""
+        logger.info(f"📩 /newssources от пользователя {event.chat_id}")
+        
+        from brains.news import get_news_sources, enable_source, disable_source
+        
+        args = event.text.split()
+        
+        if len(args) < 2:
+            # Показываем список источников
+            sources = await get_news_sources()
+            
+            message = "📰 **Источники новостей:**\n\n"
+            for src in sources:
+                status = "✅" if src.get("enabled", True) else "⏸️"
+                message += f"{status} **{src['name']}** ({src['category']})\n"
+                message += f"   `{src['url']}`\n\n"
+            
+            message += """**Использование:**
+`/newssources enable <name>` — включить
+`/newssources disable <name>` — отключить
+"""
+            await event.respond(message)
+            return
+        
+        # Управление источниками
+        command = args[1].lower()
+        source_name = " ".join(args[2:]) if len(args) > 2 else ""
+        
+        if command == 'enable':
+            success = await enable_source(source_name)
+            if success:
+                await event.respond(f"✅ Источник '{source_name}' включен")
+            else:
+                await event.respond(f"❌ Источник '{source_name}' не найден")
+        
+        elif command == 'disable':
+            success = await disable_source(source_name)
+            if success:
+                await event.respond(f"⏸️ Источник '{source_name}' отключен")
+            else:
+                await event.respond(f"❌ Источник '{source_name}' не найден")
+        
+        else:
+            await event.respond("Неизвестная команда. Используйте /newssources для справки.")
+
+    @client.on(events.NewMessage(pattern='/newsclear'))
+    async def news_clear_handler(event):
+        """Скилл: Очистить историю новостей"""
+        logger.info(f"📩 /newsclear от пользователя {event.chat_id}")
+        
+        from brains.news import clear_old_news_history
+        
+        args = event.text.split()
+        days = 30
+        
+        if len(args) > 1:
+            try:
+                days = int(args[1])
+            except ValueError:
+                pass
+        
+        count = await clear_old_news_history(days)
+        await event.respond(f"🧹 Удалено {count} новостей старше {days} дн.")
+
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
         """Интеллектуальное общение (текст + голос) + Обработка напоминаний"""

@@ -110,8 +110,27 @@ CREATE TABLE IF NOT EXISTS employees (
 CREATE INDEX IF NOT EXISTS idx_employees_birthday ON employees(birthday);
 CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department);
 
+-- Таблица для истории новостей (отслеживание просмотренных)
+CREATE TABLE IF NOT EXISTS news_history (
+    id BIGSERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    link TEXT UNIQUE NOT NULL,
+    source TEXT NOT NULL,
+    category TEXT,
+    published_at TIMESTAMPTZ,
+    shown_at TIMESTAMPTZ DEFAULT NOW(),
+    user_id BIGINT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Индексы для новостей
+CREATE INDEX IF NOT EXISTS idx_news_shown_at ON news_history(shown_at DESC);
+CREATE INDEX IF NOT EXISTS idx_news_category ON news_history(category);
+CREATE INDEX IF NOT EXISTS idx_news_user ON news_history(user_id);
+
 -- Комментарии
 COMMENT ON TABLE health_records IS 'История напоминаний о здоровье (уколы, замеры)';
 COMMENT ON TABLE memories IS 'Векторная память для RAG (долговременная память Карины)';
 COMMENT ON TABLE reminders IS 'Умные напоминания с эскалацией и персистентностью';
 COMMENT ON TABLE employees IS 'Сотрудники компании с днями рождения и характеристиками';
+COMMENT ON TABLE news_history IS 'История показанных новостей для отслеживания прочитанного';
