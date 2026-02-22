@@ -724,9 +724,9 @@ def register_karina_base_skills(client):
                 
                 from brains.vision import analyze_photo_scene
                 result = await analyze_photo_scene(photo_path, user_id=event.chat_id)
-                
+
                 if result.get("success"):
-                    await event.respond(f"🖼️ **Анализ:**\n\n{result.get('description', result.get('full_analysis', 'Анализ не удался')}")
+                    await event.respond(f"🖼️ **Анализ:**\n\n{result.get('description', result.get('full_analysis', 'Анализ не удался'))}")
                 else:
                     await event.respond(f"❌ Ошибка: {result.get('error', 'Неизвестная ошибка')}")
             
