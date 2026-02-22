@@ -200,7 +200,61 @@ async def api_plugin_settings(plugin_name):
     
     return jsonify({"settings": plugin.get_settings()})
 
-# =================================
+
+# ========== API ДЛЯ MINI APP ==========
+
+@app.route('/api/calendar')
+async def api_calendar():
+    """Получить список событий календаря (для Mini App)"""
+    try:
+        from brains.calendar import get_upcoming_events
+        events = await get_upcoming_events(max_results=10)
+        # Парсим события в список
+        event_list = []
+        if events:
+            for line in events.split('\n'):
+                if line.strip():
+                    event_list.append(line.strip())
+        return jsonify({"events": event_list})
+    except Exception as e:
+        logger.error(f"API Calendar error: {e}")
+        return jsonify({"events": [], "error": str(e)})
+
+@app.route('/api/memory/search')
+async def api_memory_search():
+    """Поиск в памяти (для Mini App)"""
+    query = request.args.get('q', '')
+    if not query:
+        return jsonify({"results": ""})
+    
+    try:
+        from brains.memory import search_memories
+        results = await search_memories(query, limit=5)
+        return jsonify({"results": results})
+    except Exception as e:
+        logger.error(f"API Memory Search error: {e}")
+        return jsonify({"results": "", "error": str(e)})
+
+@app.route('/api/health')
+async def api_health_stats():
+    """Статистика здоровья (для Mini App)"""
+    from brains.health import get_health_stats
+    days = request.args.get('days', 7, type=int)
+    
+    try:
+        # get_health_stats - синхронная функция, вызываем без await
+        stats = get_health_stats(days=days)
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"API Health Stats error: {e}")
+        return jsonify({
+            "total_days": 0,
+            "confirmed_days": 0,
+            "success_rate": 0,
+            "error": str(e)
+        })
+
+# =======================================
 # ========== КЛИЕНТЫ ==========
 
 bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
