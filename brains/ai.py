@@ -10,6 +10,7 @@ from brains.calendar import create_event, get_upcoming_events, get_conflict_repo
 from brains.weather import get_weather
 from brains.health import get_health_report_text
 from brains.employees import get_todays_birthdays
+from brains.mcp_tools import mcp_get_upcoming_birthdays
 from brains.clients import http_client, MISTRAL_URL, MISTRAL_EMBED_URL, MODEL_NAME
 
 logger = logging.getLogger(__name__)
@@ -267,6 +268,19 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_upcoming_employee_birthdays",
+            "description": "Получает список предстоящих дней рождения сотрудников. Используй, когда спрашивают о ближайших днях рождения или праздниках.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "description": "Период в днях для поиска", "default": 7}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_my_memories",
             "description": "Ищет в долговременной памяти факты, похожие на запрос. Используйте, когда нужно вспомнить ранее сохранённую информацию о пользователе.",
             "parameters": {
@@ -409,6 +423,22 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
                         else:
                             names = ", ".join([emp['full_name'] for emp in celebrants])
                             tool_result = f"Да! Сегодня день рождения празднуют: {names}. 🥳 Не забудь поздравить!"
+
+                    elif func_name == "get_upcoming_employee_birthdays":
+                        days_period = args.get("days", 7)
+                        upcoming = await asyncio.wait_for(
+                            mcp_get_upcoming_birthdays(days_period),
+                            timeout=10.0
+                        )
+                        if not upcoming:
+                            tool_result = f"В ближайшие {days_period} дней дней рождения нет. 😊"
+                        else:
+                            lines = []
+                            for emp in upcoming:
+                                bd_date = emp.get('birthday', '')[5:]  # MM-DD
+                                days_left = emp.get('days_until', 0)
+                                lines.append(f"• {emp['full_name']} — {bd_date} (через {days_left} дн.)")
+                            tool_result = f"🎂 Ближайшие дни рождения:\n" + "\n".join(lines)
 
                     elif func_name == "search_my_memories":
                         from brains.mcp_tools import mcp_search_memories

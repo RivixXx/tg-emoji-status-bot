@@ -281,6 +281,8 @@ async def run_bot_main():
         types.BotCommand("news", "Новости 🗞"),
         types.BotCommand("remember", "Запомнить факт ✍️"),
         types.BotCommand("summary", "Еженедельный отчёт 📊"),
+        types.BotCommand("employees", "Сотрудники 👥"),
+        types.BotCommand("birthdays", "Дни рождения 🎂"),
     ]
     await bot_client(functions.bots.SetBotCommandsRequest(
         scope=types.BotCommandScopeDefault(), lang_code='ru', commands=commands

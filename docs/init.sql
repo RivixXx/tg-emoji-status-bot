@@ -92,7 +92,26 @@ CREATE INDEX IF NOT EXISTS idx_reminders_type ON reminders(type);
 -- Индексы для настроек аур
 CREATE INDEX IF NOT EXISTS idx_aura_settings_user ON aura_settings(user_id);
 
+-- Таблица для сотрудников (дни рождения)
+CREATE TABLE IF NOT EXISTS employees (
+    id BIGSERIAL PRIMARY KEY,
+    full_name TEXT NOT NULL,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    position TEXT NOT NULL,
+    department TEXT NOT NULL,
+    characteristics TEXT,
+    birthday DATE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Индексы для сотрудников
+CREATE INDEX IF NOT EXISTS idx_employees_birthday ON employees(birthday);
+CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department);
+
 -- Комментарии
 COMMENT ON TABLE health_records IS 'История напоминаний о здоровье (уколы, замеры)';
 COMMENT ON TABLE memories IS 'Векторная память для RAG (долговременная память Карины)';
 COMMENT ON TABLE reminders IS 'Умные напоминания с эскалацией и персистентностью';
+COMMENT ON TABLE employees IS 'Сотрудники компании с днями рождения и характеристиками';

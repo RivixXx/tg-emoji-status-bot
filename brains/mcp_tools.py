@@ -264,3 +264,120 @@ async def mcp_execute_query(table: str, operation: str, filters: Dict = None, da
     except Exception as e:
         logger.error(f"Failed to execute query: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ========== EMPLOYEES TOOLS ==========
+
+async def mcp_get_todays_birthdays() -> List[Dict]:
+    """
+    Получение сотрудников с днем рождения сегодня
+
+    Returns:
+        Список сотрудников-именинников
+    """
+    from brains.employees import get_todays_birthdays
+    return await get_todays_birthdays()
+
+
+async def mcp_get_upcoming_birthdays(days: int = 7) -> List[Dict]:
+    """
+    Получение предстоящих дней рождения
+
+    Args:
+        days: Период в днях для поиска
+
+    Returns:
+        Список сотрудников с предстоящими ДР
+    """
+    from brains.employees import get_upcoming_birthdays
+    return await get_upcoming_birthdays(days)
+
+
+async def mcp_get_all_employees() -> List[Dict]:
+    """
+    Получение всех сотрудников
+
+    Returns:
+        Список всех сотрудников
+    """
+    from brains.employees import get_all_employees
+    return await get_all_employees()
+
+
+async def mcp_get_employee_by_id(employee_id: int) -> Optional[Dict]:
+    """
+    Получение сотрудника по ID
+
+    Args:
+        employee_id: ID сотрудника
+
+    Returns:
+        Данные сотрудника или None
+    """
+    from brains.employees import get_employee_by_id
+    return await get_employee_by_id(employee_id)
+
+
+async def mcp_add_employee(employee_data: dict) -> bool:
+    """
+    Добавление нового сотрудника
+
+    Args:
+        employee_data: Данные сотрудника {
+            full_name: str,
+            first_name: str,
+            last_name: str,
+            position: str,
+            department: str,
+            characteristics: str (опционально),
+            birthday: str (YYYY-MM-DD, опционально)
+        }
+
+    Returns:
+        True если успешно
+    """
+    from brains.employees import add_employee
+    return await add_employee(employee_data)
+
+
+async def mcp_update_employee(employee_id: int, update_data: dict) -> bool:
+    """
+    Обновление данных сотрудника
+
+    Args:
+        employee_id: ID сотрудника
+        update_data: Данные для обновления
+
+    Returns:
+        True если успешно
+    """
+    from brains.employees import update_employee
+    return await update_employee(employee_id, update_data)
+
+
+async def mcp_delete_employee(employee_id: int) -> bool:
+    """
+    Удаление сотрудника
+
+    Args:
+        employee_id: ID сотрудника для удаления
+
+    Returns:
+        True если успешно
+    """
+    from brains.employees import delete_employee
+    return await delete_employee(employee_id)
+
+
+async def mcp_generate_birthday_card(employee_data: dict) -> str:
+    """
+    Генерация промта для открытки на день рождения
+
+    Args:
+        employee_data: Данные сотрудника
+
+    Returns:
+        Промт для генерации открытки
+    """
+    from brains.employees import generate_birthday_card
+    return await generate_birthday_card(employee_data)

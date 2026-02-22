@@ -273,6 +273,8 @@ journalctl -u karina-bot -f
 | `/remember` | Запомнить факт ✍️ |
 | `/summary [days]` | Еженедельный отчёт 📊 |
 | `/aurasettings` | Настройки аур ⚙️ |
+| `/employees` | Список сотрудников 👥 |
+| `/birthdays [days]` | Дни рождения сотрудников 🎂 |
 | `/link_email` | Привязать Google Календарь 📧 |
 | `/clearrc` | Очистить кэш напоминаний 🧹 |
 

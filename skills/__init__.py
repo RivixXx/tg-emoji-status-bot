@@ -278,6 +278,75 @@ def register_karina_base_skills(client):
 Доступные ауры: emoji_status, bio_status, health_reminder, morning_greeting, evening_reminder, lunch_reminder, break_reminder
 """)
 
+    @client.on(events.NewMessage(pattern='/employees'))
+    async def employees_handler(event):
+        """Скилл: Список сотрудников по отделам"""
+        logger.info(f"📩 /employees от пользователя {event.chat_id}")
+
+        from brains.employees import get_all_employees
+
+        employees = await get_all_employees()
+
+        if not employees:
+            await event.respond("📋 Список сотрудников пока пуст.")
+            return
+
+        # Группируем по отделам
+        departments = {}
+        for emp in employees:
+            dept = emp.get('department', 'Без отдела')
+            if dept not in departments:
+                departments[dept] = []
+            departments[dept].append(emp)
+
+        message = "👥 **Сотрудники компании:**\n\n"
+
+        for dept, emps in sorted(departments.items()):
+            message += f"**{dept}:**\n"
+            for emp in emps:
+                bd = emp.get('birthday', '')
+                bd_str = f" ({bd[5:] if bd else 'Н/Д'})" if bd else ""
+                message += f"• {emp['full_name']} — {emp['position']}{bd_str}\n"
+            message += "\n"
+
+        # Telegram имеет лимит на длину сообщения (4096 символов)
+        if len(message) > 4000:
+            # Отправляем частями
+            for i in range(0, len(message), 4000):
+                await event.respond(message[i:i+4000])
+        else:
+            await event.respond(message)
+
+    @client.on(events.NewMessage(pattern='/birthdays'))
+    async def birthdays_handler(event):
+        """Скилл: Ближайшие дни рождения сотрудников"""
+        logger.info(f"📩 /birthdays от пользователя {event.chat_id}")
+
+        from brains.employees import get_upcoming_birthdays
+
+        args = event.text.split()
+        days = 7
+        if len(args) > 1:
+            try:
+                days = int(args[1])
+                days = max(1, min(days, 30))
+            except ValueError:
+                pass
+
+        upcoming = await get_upcoming_birthdays(days)
+
+        if not upcoming:
+            await event.respond(f"🎂 В ближайшие {days} дней дней рождения нет.")
+            return
+
+        message = f"🎂 **Ближайшие дни рождения ({days} дн.):**\n\n"
+        for emp in upcoming:
+            bd_date = emp.get('birthday', '')[5:] if emp.get('birthday') else 'Н/Д'
+            days_left = emp.get('days_until', 0)
+            message += f"• {emp['full_name']} — {bd_date} (через {days_left} дн.)\n"
+
+        await event.respond(message)
+
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
         """Интеллектуальное общение (текст + голос) + Обработка напоминаний"""
