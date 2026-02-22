@@ -461,6 +461,170 @@ def register_karina_base_skills(client):
         await event.respond(f"🧹 Удалено {count} новостей старше {days} дн.")
         raise events.StopPropagation
 
+    @client.on(events.NewMessage(pattern='/habits'))
+    async def habits_handler(event):
+        """Скилл: Управление привычками"""
+        logger.info(f"📩 /habits от пользователя {event.chat_id}")
+
+        from brains.productivity import get_user_habits, get_habit_stats, save_habit_track
+
+        args = event.text.split()
+
+        if len(args) < 2:
+            # Показываем список привычек и статистику
+            habits = await get_user_habits(event.chat_id)
+            stats = await get_habit_stats(event.chat_id, days=7)
+
+            message = "🎯 **Мои привычки:**\n\n"
+            for habit in habits:
+                habit_stats = stats.get(habit['name'], {})
+                rate = habit_stats.get('rate', 0)
+                bar = "█" * (rate // 10) + "░" * (10 - rate // 10)
+                message += f"{habit['name']}\n"
+                message += f"  Цель: {habit['target']}\n"
+                message += f"  [{bar}] {rate}%\n\n"
+
+            message += """**Использование:**
+`/habits track <название>` — отметить выполненной
+`/habits skip <название>` — пропустить
+`/habits stats` — подробная статистика
+"""
+            await event.respond(message)
+            raise events.StopPropagation
+
+        command = args[1].lower()
+
+        if command in ['track', 'complete', 'done'] and len(args) >= 3:
+            habit_name = " ".join(args[2:])
+            success = await save_habit_track(event.chat_id, habit_name, completed=True)
+            if success:
+                await event.respond(f"✅ Отлично! Привычка '{habit_name}' отмечена!")
+            else:
+                await event.respond(f"❌ Ошибка при сохранении")
+            raise events.StopPropagation
+
+        elif command == 'skip' and len(args) >= 3:
+            habit_name = " ".join(args[2:])
+            success = await save_habit_track(event.chat_id, habit_name, completed=False)
+            if success:
+                await event.respond(f"⏭️ Пропущено: {habit_name}")
+            raise events.StopPropagation
+
+        elif command == 'stats':
+            from brains.productivity import generate_productivity_report
+            await event.respond("📊 Генерирую отчёт...")
+            report = await generate_productivity_report(event.chat_id, days=7)
+            await event.respond(report)
+            raise events.StopPropagation
+
+        else:
+            await event.respond("Неизвестная команда. Используйте /habits для справки.")
+            raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/productivity'))
+    async def productivity_handler(event):
+        """Скилл: Отчёт о продуктивности"""
+        logger.info(f"📩 /productivity от пользователя {event.chat_id}")
+
+        from brains.productivity import generate_productivity_report
+
+        args = event.text.split()
+        days = 7
+
+        if len(args) > 1:
+            try:
+                days = int(args[1])
+                days = max(1, min(days, 30))
+            except ValueError:
+                pass
+
+        await event.respond(f"📊 Генерирую отчёт за {days} дн...")
+        report = await generate_productivity_report(event.chat_id, days)
+        await event.respond(report)
+        raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/workstats'))
+    async def workstats_handler(event):
+        """Скилл: Статистика работы"""
+        logger.info(f"📩 /workstats от пользователя {event.chat_id}")
+
+        from brains.productivity import analyze_work_patterns
+
+        args = event.text.split()
+        days = 7
+
+        if len(args) > 1:
+            try:
+                days = int(args[1])
+            except ValueError:
+                pass
+
+        patterns = await analyze_work_patterns(event.chat_id, days)
+
+        if "error" in patterns:
+            await event.respond("📊 Недостаточно данных за этот период.")
+            raise events.StopPropagation
+
+        message = f"""📊 **Рабочая статистика** ({days} дн.)
+
+⏰ **Режим:**
+• Среднее начало: {patterns.get('avg_start_time', 'Н/Д')}
+• Средний конец: {patterns.get('avg_end_time', 'Н/Д')}
+• Длительность: {patterns.get('avg_duration', 0)}ч
+
+📅 **Активность:**
+• Рабочих дней: {patterns.get('total_days', 0)}
+• Встреч: {patterns.get('total_meetings', 0)}
+
+⚠️ **Зоны внимания:**
+• Переработок: {patterns.get('overwork_days', 0)}
+• Выходных дней: {patterns.get('weekend_work_days', 0)}
+• Поздних вечеров: {patterns.get('late_night_days', 0)}
+"""
+        await event.respond(message)
+        raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/overwork'))
+    async def overwork_handler(event):
+        """Скилл: Проверка переработок"""
+        logger.info(f"📩 /overwork от пользователя {event.chat_id}")
+
+        from brains.productivity import get_overwork_days, check_overwork_alert
+
+        args = event.text.split()
+        days = 30
+
+        if len(args) > 1:
+            try:
+                days = int(args[1])
+            except ValueError:
+                pass
+
+        # Проверяем текущую тревогу
+        alert = await check_overwork_alert(event.chat_id)
+
+        if alert:
+            await event.respond(f"⚠️ **Внимание!**\n\n{alert}")
+        else:
+            await event.respond("✅ Сегодня переработок нет! Так держать! 🎉")
+
+        # Показываем статистику
+        overwork_list = await get_overwork_days(event.chat_id, days)
+
+        if overwork_list:
+            message = f"\n📊 **Переработки за {days} дн.:**\n"
+            for day in overwork_list[:5]:
+                date = day['date']
+                hours = day['duration']
+                message += f"• {date}: {hours}ч\n"
+
+            if len(overwork_list) > 5:
+                message += f"... и ещё {len(overwork_list) - 5}\n"
+
+            await event.respond(message)
+
+        raise events.StopPropagation
+
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
         """Интеллектуальное общение (текст + голос) + Обработка напоминаний"""

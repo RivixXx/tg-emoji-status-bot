@@ -286,6 +286,10 @@ async def run_bot_main():
         types.BotCommand("summary", "Еженедельный отчёт 📊"),
         types.BotCommand("employees", "Сотрудники 👥"),
         types.BotCommand("birthdays", "Дни рождения 🎂"),
+        types.BotCommand("habits", "Мои привычки 🎯"),
+        types.BotCommand("productivity", "Отчёт о продуктивности 📈"),
+        types.BotCommand("workstats", "Статистика работы ⏰"),
+        types.BotCommand("overwork", "Проверка переработок ⚠️"),
     ]
     await bot_client(functions.bots.SetBotCommandsRequest(
         scope=types.BotCommandScopeDefault(), lang_code='ru', commands=commands

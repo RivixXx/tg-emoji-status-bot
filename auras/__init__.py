@@ -181,6 +181,51 @@ async def check_calendar_reminders_task(karina_client):
         
         logger.info(f"✅ Проверка завершена. Создано напоминаний: {created_count}")
 
+
+async def check_overwork_task(karina_client, user_id: int):
+    """
+    Вечерняя проверка на переработки (21:00)
+    Если пользователь работал больше нормы — Карина напомнит об отдыхе
+    """
+    moscow_tz = timezone(timedelta(hours=3))
+    now = datetime.now(moscow_tz)
+
+    # Проверяем в 21:00
+    if now.hour == 21 and now.minute == 0:
+        from brains.productivity import check_overwork_alert, get_overwork_days
+
+        # Проверяем текущую переработку
+        alert = await check_overwork_alert(user_id)
+
+        if alert:
+            # Отправляем предупреждение
+            try:
+                await karina_client.send_message(
+                    user_id,
+                    f"😟 **Карина беспокоится...**\n\n{alert}\n\nПожалуйста, позаботься об отдыхе! 💙",
+                    parse_mode='markdown'
+                )
+                logger.info(f"⚠️ Отправлено предупреждение о переработке")
+            except Exception as e:
+                logger.error(f"Ошибка отправки предупреждения: {e}")
+
+        # Также проверяем работу в выходные
+        if now.weekday() >= 5:  # Сб или Вс
+            overwork_days = await get_overwork_days(user_id, days=1)
+            if overwork_days:
+                try:
+                    await karina_client.send_message(
+                        user_id,
+                        "🌿 **Выходной день...**\n\n"
+                        "Я вижу, ты сегодня работал. Не забывай, что отдых тоже важен для продуктивности! "
+                        "Может стоит закончить пораньше? 😊",
+                        parse_mode='markdown'
+                    )
+                    logger.info(f"⚠️ Отправлено предупреждение о работе в выходной")
+                except Exception as e:
+                    logger.error(f"Ошибка отправки предупреждения: {e}")
+
+
 async def start_auras(user_client, karina_client):
     """Главный цикл фоновых задач"""
     reconnect_attempts = 0
@@ -192,6 +237,7 @@ async def start_auras(user_client, karina_client):
             await update_bio_aura(user_client)
             await check_birthdays_task(karina_client)
             await check_calendar_reminders_task(karina_client)
+            await check_overwork_task(karina_client, MY_ID)
 
             reconnect_attempts = 0  # Сброс счётчика ошибок при успешной итерации
 
