@@ -162,12 +162,15 @@ class KarinaTTS:
         try:
             logger.debug(f"🎤 Генерация аудио (длина: {len(text)} симв.)...")
             
-            # Генерация аудио
+            # Генерация аудио (Silero v5 API)
             model = self._model['model']
-            audio = model.apply_text(text)
+            sample_rate = self._model['sample_rate']
+            
+            # Silero v5 использует speak() вместо apply_text()
+            audio = model.speak(text)
             
             # Конвертация в bytes
-            audio_bytes = self._convert_to_bytes(audio, format)
+            audio_bytes = self._convert_to_bytes(audio, sample_rate, format)
             
             logger.info(f"✅ Аудио сгенерировано ({len(audio_bytes)} байт)")
             return audio_bytes
@@ -213,16 +216,21 @@ class KarinaTTS:
         
         return text.strip()
     
-    def _convert_to_bytes(self, audio_array, format: str = "ogg") -> bytes:
-        """Конвертирует numpy array в bytes"""
+    def _convert_to_bytes(self, audio_tensor, sample_rate: int = 48000, format: str = "ogg") -> bytes:
+        """Конвертирует numpy/tensor array в bytes"""
         try:
             import numpy as np
             from scipy.io.wavfile import write as write_wav
             import subprocess
             import tempfile
             
-            # Нормализуем аудио
-            audio = np.array(audio_array)
+            # Конвертируем tensor в numpy array
+            if hasattr(audio_tensor, 'cpu'):
+                audio = audio_tensor.cpu().numpy()
+            else:
+                audio = np.array(audio_tensor)
+            
+            # Нормализуем аудио (конвертируем в int16)
             audio = np.int16(audio / np.max(np.abs(audio)) * 32767)
             
             if format == "ogg":
@@ -231,7 +239,7 @@ class KarinaTTS:
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_file:
                     wav_path = wav_file.name
                 
-                write_wav(wav_path, SAMPLE_RATE, audio)
+                write_wav(wav_path, sample_rate, audio)
                 
                 # Конвертируем в OGG через ffmpeg
                 ogg_path = wav_path.replace(".wav", ".ogg")
@@ -255,24 +263,24 @@ class KarinaTTS:
                     logger.error(f"FFmpeg error: {e.stderr.decode()}")
                     # Fallback to WAV если ffmpeg не доступен
                     os.unlink(wav_path)
-                    return self._to_wav_bytes(audio)
+                    return self._to_wav_bytes(audio, sample_rate)
                     
             else:
                 # WAV формат
-                return self._to_wav_bytes(audio)
+                return self._to_wav_bytes(audio, sample_rate)
                 
         except ImportError as e:
             logger.error(f"Missing dependency: {e}")
             raise
     
-    def _to_wav_bytes(self, audio: 'np.ndarray') -> bytes:
+    def _to_wav_bytes(self, audio: 'np.ndarray', sample_rate: int = 48000) -> bytes:
         """Конвертирует numpy array в WAV bytes"""
         import numpy as np
         from scipy.io.wavfile import write as write_wav
         import io
         
         buffer = io.BytesIO()
-        write_wav(buffer, SAMPLE_RATE, audio)
+        write_wav(buffer, sample_rate, audio)
         buffer.seek(0)
         return buffer.read()
     
