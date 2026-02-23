@@ -852,6 +852,201 @@ def register_karina_base_skills(client):
         await event.respond(message)
         raise events.StopPropagation
 
+    @client.on(events.NewMessage(pattern='/tts'))
+    async def tts_handler(event):
+        """Скилл: Управление TTS (голосовыми ответами)"""
+        logger.info(f"📩 /tts от пользователя {event.chat_id}")
+
+        from brains.tts import get_tts_settings, set_tts_enabled, get_available_voices, tts_engine
+
+        args = event.text.split()
+
+        if len(args) < 2:
+            # Показываем текущие настройки
+            settings = await get_tts_settings(event.chat_id)
+            voices = get_available_voices()
+
+            status_emoji = "✅" if settings["enabled"] else "❌"
+            current_voice = next((v for v in voices if v["id"] == settings["voice"]), None)
+
+            message = f"""
+🎤 **Голосовые ответы Карины**
+
+Статус: {status_emoji} {'Включено' if settings['enabled'] else 'Выключено'}
+Голос: {current_voice['name'] if current_voice else settings['voice']} ({current_voice['style'] if current_voice else ''})
+
+**Управление:**
+`/tts on` — Включить голосовые ответы
+`/tts off` — Выключить голосовые ответы
+`/ttsvoice` — Выбрать голос
+`/ttstest` — Тестовое сообщение
+
+**Доступные голоса:**
+"""
+            for v in voices:
+                if v["gender"] == "female":
+                    message += f"• {v['name']} — {v['style']}\n"
+
+            await event.respond(message)
+            raise events.StopPropagation
+
+        command = args[1].lower()
+
+        if command == 'on':
+            success = await set_tts_enabled(event.chat_id, True)
+            if success:
+                await event.respond("✅ **Голосовые ответы включены!**\n\nТеперь Карина будет отвечать голосом! 🎤\n\nИспользуй `/ttstest` для проверки.")
+            else:
+                await event.respond("❌ Ошибка при включении TTS")
+            raise events.StopPropagation
+
+        elif command == 'off':
+            success = await set_tts_enabled(event.chat_id, False)
+            if success:
+                await event.respond("⏸️ **Голосовые ответы выключены**\n\nТеперь Карина отвечает текстом.")
+            else:
+                await event.respond("❌ Ошибка при выключении TTS")
+            raise events.StopPropagation
+
+        elif command == 'test':
+            await event.respond("🎤 Тестирую голос...")
+
+            settings = await get_tts_settings(event.chat_id)
+            voice = settings.get("voice", "ksenia")
+
+            try:
+                from brains.tts import text_to_speech
+
+                test_text = f"Привет! Это тестовое сообщение. Мой голос — {voice}."
+                audio_data = await text_to_speech(test_text, voice=voice)
+
+                # Отправляем голосовое
+                await client.send_voice(event.chat_id, audio_data)
+                await event.respond("✅ Тест успешен!")
+
+            except Exception as e:
+                logger.error(f"TTS test error: {e}")
+                await event.respond(f"❌ Ошибка при тестировании: {e}")
+
+            raise events.StopPropagation
+
+        else:
+            await event.respond("❌ Неизвестная команда. Используйте `/tts` для справки.")
+            raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/ttsvoice'))
+    async def ttsvoice_handler(event):
+        """Скилл: Выбор голоса для TTS"""
+        logger.info(f"📩 /ttsvoice от пользователя {event.chat_id}")
+
+        from brains.tts import get_tts_settings, set_tts_voice, get_available_voices, AVAILABLE_VOICES
+
+        args = event.text.split()
+
+        if len(args) < 2:
+            # Показываем список голосов
+            settings = await get_tts_settings(event.chat_id)
+            voices = get_available_voices()
+
+            message = "🎭 **Доступные голоса:**\n\n"
+
+            for v in voices:
+                current = "⭐" if v["id"] == settings["voice"] else "  "
+                message += f"{current} **{v['name']}** (`/{ttsvoice} {v['id']}`)\n"
+                message += f"   {v['style']}. {v['description']}\n\n"
+
+            message += """**Пример:**
+`/ttsvoice ksenia` — Выбрать Ксению
+`/ttsvoice irina` — Выбрать Ирину
+"""
+            await event.respond(message)
+            raise events.StopPropagation
+
+        # Меняем голос
+        new_voice = args[1].lower()
+
+        if new_voice not in AVAILABLE_VOICES:
+            await event.respond(f"❌ Неизвестный голос: {new_voice}\n\nИспользуй `/ttsvoice` для списка доступных голосов.")
+            raise events.StopPropagation
+
+        success = await set_tts_voice(event.chat_id, new_voice)
+
+        if success:
+            voice_info = AVAILABLE_VOICES[new_voice]
+            await event.respond(f"✅ **Голос изменён на {voice_info['name']}!**\n\n{voice_info['style']}. {voice_info['description']}\n\nИспользуй `/ttstest` для проверки.")
+        else:
+            await event.respond("❌ Ошибка при смене голоса")
+
+        raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/ttstest'))
+    async def ttstest_handler(event):
+        """Скилл: Быстрое тестирование TTS"""
+        logger.info(f"📩 /ttstest от пользователя {event.chat_id}")
+
+        from brains.tts import get_tts_settings, text_to_speech
+
+        await event.respond("🎤 Генерирую тестовое сообщение...")
+
+        settings = await get_tts_settings(event.chat_id)
+        voice = settings.get("voice", "ksenia")
+
+        test_phrases = [
+            f"Привет! Я Карина, твой персональный помощник.",
+            f"Как я звучу? Мой голос — {voice}.",
+            f"Надеюсь, тебе нравится мой голос!",
+        ]
+
+        import random
+        test_text = random.choice(test_phrases)
+
+        try:
+            audio_data = await text_to_speech(test_text, voice=voice)
+
+            # Отправляем голосовое
+            await client.send_voice(event.chat_id, audio_data)
+
+        except Exception as e:
+            logger.error(f"TTS test error: {e}")
+            await event.respond(f"❌ Ошибка: {e}")
+
+        raise events.StopPropagation
+
+    @client.on(events.NewMessage(pattern='/ttsstats'))
+    async def ttsstats_handler(event):
+        """Скилл: Статистика TTS (для админа)"""
+        logger.info(f"📩 /ttsstats от пользователя {event.chat_id}")
+
+        from brains.tts import get_tts_stats, get_available_voices
+
+        # Проверка на админа (по ID)
+        from brains.config import MY_ID
+        if event.chat_id != MY_ID:
+            await event.respond("❌ Эта команда доступна только администратору.")
+            raise events.StopPropagation
+
+        stats = await get_tts_stats()
+        voices = get_available_voices()
+
+        message = f"""
+📊 **Статистика TTS**
+
+👥 Пользователи:
+• Всего: {stats['total_users']}
+• С включенным TTS: {stats['enabled_users']}
+
+🎭 Голоса:
+"""
+        for voice_id, count in stats.get('voices', {}).items():
+            voice_name = next((v['name'] for v in voices if v['id'] == voice_id), voice_id)
+            message += f"• {voice_name}: {count}\n"
+
+        if not stats.get('voices'):
+            message += "• Пока нет данных\n"
+
+        await event.respond(message)
+        raise events.StopPropagation
+
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
         """Интеллектуальное общение (текст + голос + фото) + Обработка напоминаний"""
@@ -902,12 +1097,16 @@ def register_karina_base_skills(client):
                 raise events.StopPropagation
 
         # ========== ОБРАБОТКА ГОЛОСА ==========
+        is_voice_message = False
+        
         if event.voice or event.audio:
             logger.info(f"🎤 Голосовое сообщение от {event.chat_id}")
             if not event.is_private:
                 logger.info("⚠️ Пропуск (не личный чат)")
                 return
 
+            is_voice_message = True
+            
             async with client.action(event.chat_id, 'record-audio'):
                 path = await event.download_media(file="voice_msg.ogg")
                 text = await transcribe_voice(path)
@@ -975,6 +1174,38 @@ def register_karina_base_skills(client):
             async with client.action(event.chat_id, 'typing'):
                 response = await ask_karina(event.text, chat_id=event.chat_id)
                 logger.info(f"💬 Ответ: {response[:50] if response else 'None'}...")
-                await event.reply(response)
+
+                # ========== TTS ИНТЕГРАЦИЯ ==========
+                # Проверяем настройки TTS
+                from brains.tts import get_tts_settings, text_to_speech
+
+                tts_settings = await get_tts_settings(event.chat_id)
+
+                # Отвечаем голосом ТОЛЬКО если:
+                # 1. TTS включён
+                # 2. Исходное сообщение было голосовым
+                if tts_settings.get("enabled", False) and is_voice_message:
+                    # TTS включён — отправляем голосом
+                    try:
+                        voice = tts_settings.get("voice", "ksenia")
+                        logger.info(f"🎤 TTS: генерация голоса ({voice})...")
+
+                        audio_data = await text_to_speech(response, voice=voice)
+
+                        # Отправляем голосовое сообщение
+                        await client.send_voice(
+                            event.chat_id,
+                            audio_data,
+                            caption=response[:30] + "..." if len(response) > 30 else response
+                        )
+                        logger.info(f"✅ TTS: голосовое отправлено ({len(audio_data)} байт)")
+
+                    except Exception as e:
+                        logger.error(f"❌ TTS ошибка: {e}")
+                        # Fallback на текст если TTS не сработал
+                        await event.reply(response)
+                else:
+                    # TTS выключен или текст — отправляем текстом
+                    await event.reply(response)
         else:
             logger.info(f"⚠️ Пропуск (не личный чат)")

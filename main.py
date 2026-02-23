@@ -295,6 +295,9 @@ async def run_bot_main():
         types.BotCommand("analyze", "Анализ изображения 🔍"),
         types.BotCommand("doc", "Анализ документа 📄"),
         types.BotCommand("receipt", "Анализ чека 🧾"),
+        types.BotCommand("tts", "Голосовые ответы 🎤"),
+        types.BotCommand("ttsvoice", "Выбрать голос 🎭"),
+        types.BotCommand("ttstest", "Тест голоса 🎤"),
     ]
     await bot_client(functions.bots.SetBotCommandsRequest(
         scope=types.BotCommandScopeDefault(), lang_code='ru', commands=commands
