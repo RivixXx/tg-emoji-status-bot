@@ -29,33 +29,34 @@ logger = logging.getLogger(__name__)
 MODEL_CACHE_DIR = Path("temp/tts_models")
 MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Доступные голоса (Silero v3.1)
+# Доступные голоса (Silero v5)
+# Полный список: https://github.com/snakers4/silero-models#models
 AVAILABLE_VOICES = {
-    "kseniya": {
+    "v3_1_ru": {  # Ксения в новой версии
         "name": "Ксения",
         "gender": "female",
         "style": "тёплый, дружелюбный",
         "description": "Основной голос Карины"
     },
-    "irina": {
+    "irina_v2": {
         "name": "Ирина",
         "gender": "female",
         "style": "выразительный, эмоциональный",
         "description": "Для важных сообщений"
     },
-    "natasha": {
+    "natasha_v2": {
         "name": "Наталья",
         "gender": "female",
         "style": "мягкий, заботливый",
         "description": "Для напоминаний"
     },
-    "baya": {
+    "baya_v2": {
         "name": "Бая",
         "gender": "female",
         "style": "нейтральный, спокойный",
         "description": "Деловой стиль"
     },
-    "aidar": {
+    "aidar_v2": {
         "name": "Айдар",
         "gender": "male",
         "style": "молодой, энергичный",
@@ -64,7 +65,7 @@ AVAILABLE_VOICES = {
 }
 
 # Настройки по умолчанию
-DEFAULT_VOICE = "kseniya"
+DEFAULT_VOICE = "v3_1_ru"
 SAMPLE_RATE = 48000  # Частота дискретизации
 MAX_TEXT_LENGTH = 500  # Максимум символов в сообщении
 
@@ -94,16 +95,17 @@ class KarinaTTS:
         return self._model['model']
     
     def _load_model(self):
-        """Загружает модель Silero TTS v3 (стабильная версия)"""
+        """Загружает модель Silero TTS (последняя версия)"""
         try:
             logger.info(f"🎤 Загрузка TTS модели (голос: {self.voice})...")
             
             # Импортируем Silero
             import torch
             
-            # Загружаем модель v3 (более стабильная)
+            # Загружаем модель (последняя версия)
+            # Silero автоматически использует последнюю стабильную версию
             model, example_text = torch.hub.load(
-                repo_or_dir='snakers4/silero-models:v3.1',
+                repo_or_dir='snakers4/silero-models',
                 model='silero_tts',
                 language='ru',
                 speaker=self.voice
