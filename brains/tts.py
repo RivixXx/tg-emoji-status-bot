@@ -17,7 +17,7 @@ import os
 import re
 from pathlib import Path
 from typing import Optional, Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
