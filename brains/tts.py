@@ -91,27 +91,34 @@ class KarinaTTS:
         """Ленивая загрузка модели (при первом использовании)"""
         if self._model is None:
             self._load_model()
-        return self._model
+        return self._model['model']
     
     def _load_model(self):
         """Загружает модель Silero TTS"""
         try:
             logger.info(f"🎤 Загрузка TTS модели (голос: {self.voice})...")
             
-            # Импортируем Silero (проверка что установлен)
-            from silero_tts import SileroTTS
+            # Импортируем Silero (официальный пакет)
+            import torch
             
-            # Загружаем модель
-            self._model = SileroTTS(
-                model="v3_1_ru",
-                speaker=self.voice,
-                sample_rate=SAMPLE_RATE
+            # Загружаем модель с официального репозитория
+            model, example_text = torch.hub.load(
+                repo_or_dir='snakers4/silero-models',
+                model='silero_tts',
+                language='ru',
+                speaker=self.voice
             )
+            
+            self._model = {
+                'model': model,
+                'speaker': self.voice,
+                'sample_rate': 48000
+            }
             
             logger.info(f"✅ TTS модель загружена (голос: {self.voice})")
             
         except ImportError:
-            logger.error("❌ Silero TTS не установлен. Выполни: pip install silero-tts")
+            logger.error("❌ Torch не установлен. Выполни: pip install torch")
             raise
         except Exception as e:
             logger.error(f"❌ Ошибка загрузки TTS модели: {e}")
@@ -144,20 +151,23 @@ class KarinaTTS:
         target_voice = voice or self.voice
         
         # Проверка/загрузка модели
-        if self._model is None or (target_voice != self.voice and self._model.speaker != target_voice):
+        if self._model is None or target_voice != self._model.get('speaker'):
             logger.info(f"🔄 Смена голоса на {target_voice}")
-            self.voice = target_voice
             if self._model:
-                self._model.speaker = target_voice
+                # Выгрузить старую модель
+                del self._model
+            self._load_model()
+            self.voice = target_voice
         
         try:
             logger.debug(f"🎤 Генерация аудио (длина: {len(text)} симв.)...")
             
             # Генерация аудио
-            audio_array = self.model.apply_text(text)
+            model = self._model['model']
+            audio = model.apply_text(text)
             
             # Конвертация в bytes
-            audio_bytes = self._convert_to_bytes(audio_array, format)
+            audio_bytes = self._convert_to_bytes(audio, format)
             
             logger.info(f"✅ Аудио сгенерировано ({len(audio_bytes)} байт)")
             return audio_bytes
@@ -280,21 +290,16 @@ class KarinaTTS:
             logger.error(f"❌ Неизвестный голос: {voice}")
             return False
         
+        # Если модель загружена с другим голосом — выгружаем
+        if self._model and self._model.get('speaker') != voice:
+            logger.info(f"🔄 Выгрузка модели (голос: {self._model.get('speaker')})")
+            del self._model
+            self._model = None
+        
         self.voice = voice
         
-        # Если модель уже загружена, меняем голос
-        if self._model:
-            try:
-                self._model.speaker = voice
-                logger.info(f"✅ Голос изменён на {voice}")
-                return True
-            except Exception as e:
-                logger.error(f"❌ Ошибка смены голоса: {e}")
-                # Перезагружаем модель
-                self._model = None
-                self._load_model()
-                return True
-        
+        # При следующем использовании загрузится новый голос
+        logger.info(f"✅ Голос изменён на {voice}")
         return True
     
     def get_info(self) -> Dict:
