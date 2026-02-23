@@ -10,3 +10,8 @@ psycopg2-binary
 sqlalchemy
 python-dotenv
 supabase
+
+# TTS (Text-to-Speech)
+torch
+torchaudio
+silero-tts
