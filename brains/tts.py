@@ -155,12 +155,13 @@ class KarinaTTS:
         try:
             logger.debug(f"🎤 Генерация аудио (длина: {len(text)} симв.)...")
             
-            # Silero v3 API
+            # Silero v5 API
             model = self._model['model']
             sample_rate = self._model['sample_rate']
             
-            # v3: apply_text(text)
-            audio = model.apply_text(text)
+            # v5: прямой вызов модели (text, speaker, sample_rate)
+            # Возвращает audio tensor
+            audio = model(text, self.voice, sample_rate)
             
             # Конвертация в bytes
             audio_bytes = self._convert_to_bytes(audio, sample_rate, format)
