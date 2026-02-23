@@ -29,33 +29,33 @@ logger = logging.getLogger(__name__)
 MODEL_CACHE_DIR = Path("temp/tts_models")
 MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Доступные голоса (Silero v5)
+# Доступные голоса (Silero v3.1)
 AVAILABLE_VOICES = {
-    "kseniya_v2": {
+    "kseniya": {
         "name": "Ксения",
         "gender": "female",
         "style": "тёплый, дружелюбный",
         "description": "Основной голос Карины"
     },
-    "irina_v2": {
+    "irina": {
         "name": "Ирина",
         "gender": "female",
         "style": "выразительный, эмоциональный",
         "description": "Для важных сообщений"
     },
-    "natasha_v2": {
+    "natasha": {
         "name": "Наталья",
         "gender": "female",
         "style": "мягкий, заботливый",
         "description": "Для напоминаний"
     },
-    "baya_v2": {
+    "baya": {
         "name": "Бая",
         "gender": "female",
         "style": "нейтральный, спокойный",
         "description": "Деловой стиль"
     },
-    "aidar_v2": {
+    "aidar": {
         "name": "Айдар",
         "gender": "male",
         "style": "молодой, энергичный",
@@ -64,7 +64,7 @@ AVAILABLE_VOICES = {
 }
 
 # Настройки по умолчанию
-DEFAULT_VOICE = "kseniya_v2"
+DEFAULT_VOICE = "kseniya"
 SAMPLE_RATE = 48000  # Частота дискретизации
 MAX_TEXT_LENGTH = 500  # Максимум символов в сообщении
 
@@ -94,16 +94,16 @@ class KarinaTTS:
         return self._model['model']
     
     def _load_model(self):
-        """Загружает модель Silero TTS"""
+        """Загружает модель Silero TTS v3 (стабильная версия)"""
         try:
             logger.info(f"🎤 Загрузка TTS модели (голос: {self.voice})...")
             
-            # Импортируем Silero (официальный пакет)
+            # Импортируем Silero
             import torch
             
-            # Загружаем модель с официального репозитория
+            # Загружаем модель v3 (более стабильная)
             model, example_text = torch.hub.load(
-                repo_or_dir='snakers4/silero-models',
+                repo_or_dir='snakers4/silero-models:v3.1',
                 model='silero_tts',
                 language='ru',
                 speaker=self.voice
@@ -131,15 +131,7 @@ class KarinaTTS:
         format: str = "ogg"
     ) -> bytes:
         """
-        Конвертирует текст в аудио
-        
-        Args:
-            text: Текст для синтеза
-            voice: Голос (если None, используется self.voice)
-            format: Формат аудио ("ogg" для Telegram)
-        
-        Returns:
-            bytes: Аудиоданные в формате OGG
+        Конвертирует текст в аудио (Silero v3)
         """
         # Очистка текста
         text = self._clean_text(text)
@@ -154,7 +146,6 @@ class KarinaTTS:
         if self._model is None or target_voice != self._model.get('speaker'):
             logger.info(f"🔄 Смена голоса на {target_voice}")
             if self._model:
-                # Выгрузить старую модель
                 del self._model
             self._load_model()
             self.voice = target_voice
@@ -162,12 +153,12 @@ class KarinaTTS:
         try:
             logger.debug(f"🎤 Генерация аудио (длина: {len(text)} симв.)...")
             
-            # Генерация аудио (Silero v5 API)
+            # Silero v3 API
             model = self._model['model']
             sample_rate = self._model['sample_rate']
             
-            # Silero v5 использует speak() вместо apply_text()
-            audio = model.speak(text)
+            # v3: apply_text(text)
+            audio = model.apply_text(text)
             
             # Конвертация в bytes
             audio_bytes = self._convert_to_bytes(audio, sample_rate, format)
