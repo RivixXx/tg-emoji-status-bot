@@ -29,33 +29,33 @@ logger = logging.getLogger(__name__)
 MODEL_CACHE_DIR = Path("temp/tts_models")
 MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Доступные голоса
+# Доступные голоса (Silero v5)
 AVAILABLE_VOICES = {
-    "ksenia": {
+    "kseniya_v2": {
         "name": "Ксения",
         "gender": "female",
         "style": "тёплый, дружелюбный",
         "description": "Основной голос Карины"
     },
-    "elen": {
-        "name": "Елена",
-        "gender": "female",
-        "style": "нейтральный, спокойный",
-        "description": "Деловой стиль"
-    },
-    "irina": {
+    "irina_v2": {
         "name": "Ирина",
         "gender": "female",
         "style": "выразительный, эмоциональный",
         "description": "Для важных сообщений"
     },
-    "natasha": {
+    "natasha_v2": {
         "name": "Наталья",
         "gender": "female",
         "style": "мягкий, заботливый",
         "description": "Для напоминаний"
     },
-    "aidar": {
+    "baya_v2": {
+        "name": "Бая",
+        "gender": "female",
+        "style": "нейтральный, спокойный",
+        "description": "Деловой стиль"
+    },
+    "aidar_v2": {
         "name": "Айдар",
         "gender": "male",
         "style": "молодой, энергичный",
@@ -64,7 +64,7 @@ AVAILABLE_VOICES = {
 }
 
 # Настройки по умолчанию
-DEFAULT_VOICE = "ksenia"
+DEFAULT_VOICE = "kseniya_v2"
 SAMPLE_RATE = 48000  # Частота дискретизации
 MAX_TEXT_LENGTH = 500  # Максимум символов в сообщении
 
