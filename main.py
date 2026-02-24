@@ -351,10 +351,8 @@ user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
 
 async def run_bot_main():
     """Основной цикл бота"""
-    # Регистрируем скиллы из модуля skills
-    register_karina_base_skills(bot_client)
-
-    # ========== VPN SHOP LOGIC (ДВОЙНОЕ ДНО) ==========
+    # ========== VPN SHOP LOGIC (ДВОЙНОЕ ДНО) — ПЕРВЫМ! ==========
+    # Регистрируем ПЕРЕД скиллами чтобы перехватывал сообщения от чужих ID
 
     @bot_client.on(events.NewMessage(func=lambda e: e.is_private and e.sender_id != MY_ID))
     async def vpn_stranger_interceptor(event):
@@ -472,7 +470,7 @@ async def run_bot_main():
                 # Пользователь уже существует — пробуем получить ключ
                 from brains.vpn_api import marzban_client
                 user_data = await marzban_client.get_user(f"vpn_{sender_id}")
-                
+
                 if user_data and user_data.get("success"):
                     await event.edit(
                         "🟢 **[ КЛЮЧ АКТИВИРОВАН ]**\n\n"
@@ -513,6 +511,10 @@ async def run_bot_main():
                 )
     # ==================================================
 
+    # Регистрируем скиллы из модуля skills (после VPN!)
+    register_karina_base_skills(bot_client)
+
+    # Запускаем бота
     await bot_client.start(bot_token=KARINA_TOKEN)
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")
