@@ -1171,6 +1171,14 @@ def register_karina_base_skills(client):
 
         if event.is_private:
             logger.info(f"💬 Обработка сообщения в ЛС: {event.text[:30]}...")
+            
+            # Проверка что ещё не отвечали на это сообщение
+            if hasattr(event, '_responded') and event._responded:
+                logger.debug(f"⚠️ Пропуск (уже отвечали)")
+                return
+            
+            event._responded = True
+            
             async with client.action(event.chat_id, 'typing'):
                 response = await ask_karina(event.text, chat_id=event.chat_id)
                 logger.info(f"💬 Ответ: {response[:50] if response else 'None'}...")
@@ -1184,7 +1192,10 @@ def register_karina_base_skills(client):
                 # Отвечаем голосом ТОЛЬКО если:
                 # 1. TTS включён
                 # 2. Исходное сообщение было голосовым
-                if tts_settings.get("enabled", False) and is_voice_message:
+                # 3. TTS работает (временное отключение пока чиним)
+                use_tts = False  # TODO: Включить когда починим Silero v5
+                
+                if tts_settings.get("enabled", False) and is_voice_message and use_tts:
                     # TTS включён — отправляем голосом
                     try:
                         voice = tts_settings.get("voice", "ksenia")

@@ -159,9 +159,9 @@ class KarinaTTS:
             model = self._model['model']
             sample_rate = self._model['sample_rate']
             
-            # v5: прямой вызов модели (text, speaker, sample_rate)
-            # Возвращает audio tensor
-            audio = model(text, self.voice, sample_rate)
+            # v5: используем apply_text с параметрами
+            # model.apply_text(text, speaker, sample_rate, put_accent_on)
+            audio = model.apply_text(text, speaker=self.voice, sample_rate=sample_rate)
             
             # Конвертация в bytes
             audio_bytes = self._convert_to_bytes(audio, sample_rate, format)
