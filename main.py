@@ -633,6 +633,7 @@ async def run_bot_main():
 
                 if user_data and user_data.get("success"):
                     vless_key = user_data.get('vless_link')
+                    
 
                     # Обновляем заказ
                     if order:
