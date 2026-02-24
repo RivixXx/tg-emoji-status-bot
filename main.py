@@ -29,6 +29,15 @@ from brains.reminders import reminder_manager, start_reminder_loop, ReminderType
 from brains.emotions import get_emotion_state, set_emotion
 from brains.news import get_latest_news
 from brains.ai import ask_karina
+from brains.mcp_vpn_shop import (
+    mcp_vpn_get_user,
+    mcp_vpn_create_user,
+    mcp_vpn_update_user_state,
+    mcp_vpn_add_referral,
+    mcp_vpn_get_referral_stats,
+    mcp_vpn_create_order,
+    calculate_referral_commission
+)
 from auras import state, start_auras
 from skills import register_karina_base_skills
 from plugins import plugin_manager
@@ -360,9 +369,8 @@ async def run_bot_main():
     # ========== VPN SHOP LOGIC (ДВОЙНОЕ ДНО + ВОРОНКА ПРОДАЖ) ==========
     # Регистрируем ПЕРЕД скиллами чтобы перехватывал сообщения от чужих ID
     
-    # Временная БД для хранения состояний пользователей (потом перенесешь в Supabase)
-    # Формат: {user_id: {"state": "NEW", "email": None, "code": None}}
-    vpn_users = {}
+    # Используем Supabase через MCP вместо временного словаря
+    # Состояния: NEW, WAITING_EMAIL, WAITING_CODE, REGISTERED
 
     def get_main_menu():
         """Возвращает клавиатуру главного меню (как на скриншоте OverSecure)"""
@@ -378,11 +386,21 @@ async def run_bot_main():
         user_id = event.sender_id
         text = event.text.strip()
 
-        # Инициализация нового пользователя
-        if user_id not in vpn_users:
-            vpn_users[user_id] = {"state": "NEW", "email": None, "code": None}
+        # Получаем или создаём пользователя
+        user = await mcp_vpn_get_user(user_id)
+        if not user:
+            # Проверяем есть ли реферер в /start
+            referred_by = None
+            if event.text.startswith('/start') and len(event.text.split()) > 1:
+                try:
+                    referred_by = int(event.text.split()[1])
+                except (ValueError, IndexError):
+                    pass
+            
+            await mcp_vpn_create_user(user_id, referred_by=referred_by)
+            user = await mcp_vpn_get_user(user_id)
 
-        state = vpn_users[user_id]["state"]
+        state = user["state"]
 
         # ШАГ 1: Приветствие и Оферта (реагируем на /start или любое первое слово)
         if state == "NEW":
@@ -407,9 +425,9 @@ async def run_bot_main():
             if re.match(r"[^ @]+@[^ @]+\.[^ @]+", text):
                 # Генерируем код (4 цифры)
                 code = str(random.randint(1000, 9999))
-                vpn_users[user_id]["email"] = text
-                vpn_users[user_id]["code"] = code
-                vpn_users[user_id]["state"] = "WAITING_CODE"
+                
+                # Сохраняем в БД
+                await mcp_vpn_update_user_state(user_id, "WAITING_CODE", email=text, code=code)
                 
                 # В будущем здесь будет реальная отправка email. 
                 # Пока для теста выводим код прямо в чат!
@@ -424,12 +442,18 @@ async def run_bot_main():
 
         # ШАГ 3: Обработка ввода Кода
         elif state == "WAITING_CODE":
-            if text == vpn_users[user_id]["code"]:
-                vpn_users[user_id]["state"] = "REGISTERED"
+            if text == user["verification_code"]:
+                await mcp_vpn_update_user_state(user_id, "REGISTERED")
                 await event.respond(
                     "🎉 **[ ДОСТУП РАЗРЕШЕН ]**\n\nАккаунт успешно создан! Можете пользоваться терминалом.",
                     buttons=get_main_menu()
                 )
+                
+                # Если есть реферер — начисляем комиссию
+                if user.get("referred_by"):
+                    referrer_id = user["referred_by"]
+                    await mcp_vpn_add_referral(referrer_id, user_id, commission=0)
+                    logger.info(f"✅ Referral registered: {referrer_id} -> {user_id}")
             else:
                 await event.respond("❌ Неверный код. Попробуйте еще раз:")
             raise events.StopPropagation
@@ -437,7 +461,7 @@ async def run_bot_main():
         # ШАГ 4: Главное меню (Пользователь зарегистрирован)
         elif state == "REGISTERED":
             if text == "👤 Профиль":
-                email = vpn_users[user_id]["email"]
+                email = user.get("email", "Не указан")
                 await event.respond(f"**Ваш профиль:**\n📧 Email: `{email}`\n🆔 ID: `{user_id}`\n⏳ Активных подписок: 0")
             elif text == "🛒 Тарифы (Магазин)":
                 keyboard = [
@@ -448,9 +472,21 @@ async def run_bot_main():
             elif text == "📖 Инструкция (FAQ)":
                 await event.respond("Здесь будет подробная инструкция со скриншотами для Hiddify и V2Box.")
             elif text == "💳 Баланс":
-                await event.respond("Ваш баланс: 0 ₽")
+                balance = user.get("balance", 0)
+                await event.respond(f"Ваш баланс: {balance} ₽")
             elif text == "👥 Рефералы":
-                await event.respond("👥 **Реферальная система**\n\nПригласи друзей и получи 10% от их покупок!\n\nТвоя ссылка: `https://t.me/your_bot?start={}`".format(user_id))
+                stats = await mcp_vpn_get_referral_stats(user_id)
+                total_referrals = stats.get("total_referrals", 0)
+                total_commission = stats.get("total_commission", 0)
+                referral_link = f"https://t.me/your_bot?start={user_id}"
+                await event.respond(
+                    f"👥 **Реферальная система**\n\n"
+                    f"Пригласи друзей и получи 10% от их покупок!\n\n"
+                    f"📊 Твоя статистика:\n"
+                    f"• Рефералов: {total_referrals}\n"
+                    f"• Заработано: {total_commission} ₽\n\n"
+                    f"Твоя ссылка: `{referral_link}`"
+                )
             elif text == "🆘 Поддержка":
                 await event.respond("🆘 **Поддержка**\n\nПо всем вопросам обращайтесь: @support")
             
@@ -492,6 +528,9 @@ async def run_bot_main():
             # Проверка оплаты и генерация ключа через Marzban API
             months = int(data.split("_")[1])
             sender_id = event.sender_id
+            
+            # Рассчитываем сумму
+            amount = 150 if months == 1 else 400
 
             try:
                 # Отправляем сообщение о проверке
@@ -500,6 +539,11 @@ async def run_bot_main():
                     "Соединение с сервером...\n"
                     "Генерация криптографического ключа..."
                 )
+
+                # Создаём заказ в БД
+                order = await mcp_vpn_create_order(sender_id, months, amount)
+                if order:
+                    logger.info(f"✅ Order created: {order['id']} for user {sender_id}")
 
                 # Генерируем ключ через Marzban
                 from brains.vpn_api import check_payment_and_issue_key
@@ -510,6 +554,24 @@ async def run_bot_main():
                 if result.get("success"):
                     vless_key = result.get("vless_key")
                     expire_days = result.get("expire_days", 30)
+
+                    # Обновляем заказ
+                    if order:
+                        await mcp_vpn_update_order(order['id'], "completed", vless_key=vless_key)
+
+                    # Начисляем комиссию рефереру (10%)
+                    user = await mcp_vpn_get_user(sender_id)
+                    if user and user.get("referred_by"):
+                        referrer_id = user["referred_by"]
+                        commission = calculate_referral_commission(amount)
+                        
+                        # Обновляем баланс реферера
+                        referrer = await mcp_vpn_get_user(referrer_id)
+                        if referrer:
+                            new_balance = float(referrer.get("balance", 0)) + commission
+                            await mcp_vpn_update_balance(referrer_id, new_balance)
+                            await mcp_vpn_add_referral(referrer_id, sender_id, commission=commission)
+                            logger.info(f"💰 Commission {commission}₽ accrued to {referrer_id}")
 
                     # Генерируем QR-код в памяти
                     qr = qrcode.QRCode(
@@ -557,6 +619,10 @@ async def run_bot_main():
 
                 if user_data and user_data.get("success"):
                     vless_key = user_data.get('vless_link')
+
+                    # Обновляем заказ
+                    if order:
+                        await mcp_vpn_update_order(order['id'], "completed", vless_key=vless_key)
 
                     # Генерируем QR-код для продления
                     qr = qrcode.QRCode(
