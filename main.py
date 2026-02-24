@@ -519,6 +519,7 @@ async def run_bot_main():
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")
     
+    # Устанавливаем команды ТОЛЬКО для вашего аккаунта (MY_ID)
     commands = [
         types.BotCommand("start", "Перезапустить 🔄"),
         types.BotCommand("app", "Панель управления 📱"),
@@ -547,8 +548,15 @@ async def run_bot_main():
         types.BotCommand("ttsvoice", "Выбрать голос 🎭"),
         types.BotCommand("ttstest", "Тест голоса 🎤"),
     ]
+    
+    # Команды только для владельца
     await bot_client(functions.bots.SetBotCommandsRequest(
-        scope=types.BotCommandScopeDefault(), lang_code='ru', commands=commands
+        scope=types.BotCommandScopeUser(user_id=MY_ID), lang_code='ru', commands=commands
+    ))
+    
+    # Пустые команды для всех остальных (чтобы скрыть меню)
+    await bot_client(functions.bots.SetBotCommandsRequest(
+        scope=types.BotCommandScopeDefault(), lang_code='ru', commands=[]
     ))
     
     # Heartbeat таска для бота
