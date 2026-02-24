@@ -397,8 +397,11 @@ async def run_bot_main():
                 except (ValueError, IndexError):
                     pass
             
-            await mcp_vpn_create_user(user_id, referred_by=referred_by)
-            user = await mcp_vpn_get_user(user_id)
+            user = await mcp_vpn_create_user(user_id, referred_by=referred_by)
+            if not user:
+                logger.error(f"❌ Failed to create VPN user {user_id}")
+                await event.respond("⚠️ Ошибка при регистрации. Попробуйте позже.")
+                raise events.StopPropagation
 
         state = user["state"]
 
