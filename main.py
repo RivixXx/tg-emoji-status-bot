@@ -627,6 +627,15 @@ async def run_bot_main():
         lang_code='ru',
         commands=commands
     ))
+    
+    # Выдаем тебе кнопку запуска Mini App (слева от поля ввода)
+    await bot_client(functions.bots.SetBotMenuButtonRequest(
+        user_id=my_peer,
+        button=types.BotMenuButton(
+            text="Карина App 📱",
+            url="https://tg-emoji-status-bot-production.up.railway.app/"
+        )
+    ))
     # ================================================
     
     # Heartbeat таска для бота
