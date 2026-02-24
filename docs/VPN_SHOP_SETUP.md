@@ -8,13 +8,15 @@
 - **URL:** `http://108.165.174.164:8000`
 - **API Docs:** `http://108.165.174.164:8000/docs`
 
-### 2. Получение Admin Token
+### 2. Учётные данные
 
-1. Откройте `http://108.165.174.164:8000/docs`
-2. Нажмите `/api/admin/token` → `Try it out`
-3. Введите `username: root` и ваш пароль
-4. Нажмите `Try it out`
-5. Скопируйте полученный токен
+**Важно:** Marzban использует **JWT токены** вместо статических ключей. Карина будет автоматически получать токен при каждом запросе.
+
+```bash
+# Логин и пароль от панели Marzban
+MARZBAN_USER=root
+MARZBAN_PASS=ваш_пароль_от_панели
+```
 
 ### 3. Настройка переменных окружения
 
@@ -23,7 +25,8 @@
 ```bash
 # Marzban VPN API
 MARZBAN_URL=http://108.165.174.164:8000
-MARZBAN_ADMIN_TOKEN=your_admin_token_here
+MARZBAN_USER=root
+MARZBAN_PASS=your_secure_password_here
 ```
 
 ### 4. Проверка подключения

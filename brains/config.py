@@ -38,4 +38,5 @@ EMOJI_MAP = {
 
 # Marzban VPN API
 MARZBAN_URL = os.environ.get('MARZBAN_URL', 'http://108.165.174.164:8000')
-MARZBAN_ADMIN_TOKEN = os.environ.get('MARZBAN_ADMIN_TOKEN', '')
+MARZBAN_USER = os.environ.get('MARZBAN_USER', 'root')
+MARZBAN_PASS = os.environ.get('MARZBAN_PASS', '')

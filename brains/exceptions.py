@@ -48,6 +48,11 @@ class VPNConnectionError(VPNError):
     pass
 
 
+class VPNAuthorizationError(VPNError):
+    """Ошибка авторизации в Marzban (неверный логин/пароль)"""
+    pass
+
+
 class VPNUserExistsError(VPNError):
     """Пользователь уже существует"""
     pass

@@ -1,5 +1,5 @@
 """
-Tests for VPN API (Marzban Client)
+Tests for VPN API (Marzban Client) - JWT Authentication
 """
 import pytest
 import asyncio
@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from brains.vpn_api import MarzbanClient, generate_vpn_key
-from brains.exceptions import VPNError, VPNUserExistsError
+from brains.exceptions import VPNError, VPNUserExistsError, VPNAuthorizationError, VPNConnectionError
 
 
 class TestMarzbanClient:
@@ -22,34 +22,77 @@ class TestMarzbanClient:
         client = MarzbanClient()
         
         assert client.base_url == "http://108.165.174.164:8000"
-        assert "Authorization" in client.headers
+        assert client.username == "root"
+        assert client.password is None  # Если не задан в env
 
     def test_init_with_env(self):
         """Проверка инициализации из env"""
-        # Тест проверяет что переменные окружения подхватываются
-        # Из-за того что класс инициализируется при импорте,
-        # проверяем что дефолтные значения корректны
         client = MarzbanClient()
         
         # Проверяем что URL установлен (из env или дефолтный)
         assert "http://" in client.base_url or "https://" in client.base_url
-        assert "Authorization" in client.headers
+        assert client.username == "root"
+
+    @pytest.mark.asyncio
+    async def test_get_token_success(self):
+        """Проверка получения токена"""
+        client = MarzbanClient()
+        client.password = "test_password"
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"access_token": "test_token_123"}
+        
+        with patch('httpx.AsyncClient.post', return_value=mock_response):
+            token = await client.get_token()
+            
+            assert token == "test_token_123"
+
+    @pytest.mark.asyncio
+    async def test_get_token_auth_error(self):
+        """Проверка ошибки авторизации"""
+        client = MarzbanClient()
+        client.password = "wrong_password"
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        
+        with patch('httpx.AsyncClient.post', return_value=mock_response):
+            with pytest.raises(VPNAuthorizationError):
+                await client.get_token()
+
+    @pytest.mark.asyncio
+    async def test_get_token_no_password(self):
+        """Проверка без пароля"""
+        client = MarzbanClient()
+        client.password = None
+        
+        token = await client.get_token()
+        
+        assert token is None
 
     @pytest.mark.asyncio
     async def test_create_user_success(self):
         """Проверка успешного создания пользователя"""
         client = MarzbanClient()
-        client.admin_token = "test_token"
+        client.password = "test_password"
         
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+        # Mock для получения токена
+        token_response = MagicMock()
+        token_response.status_code = 200
+        token_response.json.return_value = {"access_token": "test_token"}
+        
+        # Mock для создания пользователя
+        user_response = MagicMock()
+        user_response.status_code = 200
+        user_response.json.return_value = {
             "username": "vpn_123",
-            "links": ["vless://test-key-123"],
-            "subscription_url": "https://sub.url"
+            "links": ["vless://test-key-123"]
         }
         
-        with patch('httpx.AsyncClient.post', return_value=mock_response):
+        with patch('httpx.AsyncClient.post') as mock_post:
+            mock_post.side_effect = [token_response, user_response]
+            
             result = await client.create_user("vpn_123", expire_days=30)
             
             assert result["success"] == True
@@ -59,24 +102,29 @@ class TestMarzbanClient:
     @pytest.mark.asyncio
     async def test_create_user_conflict(self):
         """Проверка обработки конфликта (пользователь существует)"""
-        from brains.exceptions import VPNUserExistsError
-        
         client = MarzbanClient()
-        client.admin_token = "test_token"
+        client.password = "test_password"
         
-        mock_response = MagicMock()
-        mock_response.status_code = 409
+        # Mock для получения токена
+        token_response = MagicMock()
+        token_response.status_code = 200
+        token_response.json.return_value = {"access_token": "test_token"}
         
-        with patch('httpx.AsyncClient.post', return_value=mock_response):
-            # Теперь код выбрасывает исключение при конфликте
+        # Mock для создания пользователя (конфликт)
+        user_response = MagicMock()
+        user_response.status_code = 409
+        
+        with patch('httpx.AsyncClient.post') as mock_post:
+            mock_post.side_effect = [token_response, user_response]
+            
             with pytest.raises(VPNUserExistsError):
                 await client.create_user("vpn_123")
 
     @pytest.mark.asyncio
-    async def test_create_user_no_token(self):
-        """Проверка без токена"""
+    async def test_create_user_no_password(self):
+        """Проверка без пароля"""
         client = MarzbanClient()
-        client.admin_token = None
+        client.password = None
         
         result = await client.create_user("vpn_123")
         
@@ -85,13 +133,10 @@ class TestMarzbanClient:
     @pytest.mark.asyncio
     async def test_create_user_timeout(self):
         """Проверка обработки таймаута"""
-        from brains.exceptions import VPNError
-        
         client = MarzbanClient()
-        client.admin_token = "test_token"
+        client.password = "test_password"
         
         with patch('httpx.AsyncClient.post', side_effect=Exception("Timeout")):
-            # Код выбрасывает VPNError при непредвиденных ошибках
             with pytest.raises(VPNError):
                 await client.create_user("vpn_123")
 
@@ -157,7 +202,3 @@ class TestGenerateVPNKey:
             key = await generate_vpn_key(123456, months=1)
             
             assert key is None
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
