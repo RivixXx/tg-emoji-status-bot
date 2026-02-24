@@ -16,6 +16,7 @@ import hypercorn.asyncio
 from hypercorn.config import Config
 from telethon import functions, types, events, TelegramClient, Button
 from telethon.sessions import StringSession
+from telethon.tl.types import BotCommandScopeDefault, BotCommandScopePeer, InputUserEmpty
 from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION, MY_ID
 from brains.memory import search_memories
 from brains.calendar import get_upcoming_events, get_conflict_report
@@ -575,8 +576,10 @@ async def run_bot_main():
     await bot_client.start(bot_token=KARINA_TOKEN)
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")
+
+    # ========== НАСТРОЙКА ПРИВАТНОСТИ МЕНЮ ==========
     
-    # Устанавливаем команды бота (для всех пользователей)
+    # Список всех команд для владельца
     commands = [
         types.BotCommand("start", "Перезапустить 🔄"),
         types.BotCommand("app", "Панель управления 📱"),
@@ -606,10 +609,26 @@ async def run_bot_main():
         types.BotCommand("ttstest", "Тест голоса 🎤"),
     ]
     
-    # Устанавливаем команды для всех (BotCommandScopeUser нет в Telethon)
+    # 1. Стираем все команды для обычных пользователей (Default)
     await bot_client(functions.bots.SetBotCommandsRequest(
-        scope=types.BotCommandScopeDefault(), lang_code='ru', commands=commands
+        scope=BotCommandScopeDefault(),
+        lang_code='',
+        commands=[]
     ))
+    
+    # Убираем большую кнопку "Mini App" слева от поля ввода для всех
+    await bot_client(functions.bots.SetBotMenuButtonRequest(
+        user_id=InputUserEmpty(),
+        button=types.BotMenuButtonCommands()
+    ))
+
+    # 2. Устанавливаем твои роскошные команды ТОЛЬКО для тебя (MY_ID)
+    await bot_client(functions.bots.SetBotCommandsRequest(
+        scope=BotCommandScopePeer(peer=MY_ID),
+        lang_code='ru',
+        commands=commands
+    ))
+    # ================================================
     
     # Heartbeat таска для бота
     async def bot_heartbeat():
