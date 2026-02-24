@@ -622,10 +622,20 @@ async def run_bot_main():
     # 2. Устанавливаем твои роскошные команды ТОЛЬКО для тебя
     my_peer = await bot_client.get_input_entity(MY_ID)
 
+    # Выдаем тебе команды
     await bot_client(functions.bots.SetBotCommandsRequest(
         scope=types.BotCommandScopePeer(peer=my_peer),
         lang_code='ru',
         commands=commands
+    ))
+    
+    # Выдаем тебе кнопку запуска Mini App (слева от поля ввода)
+    await bot_client(functions.bots.SetBotMenuButtonRequest(
+        user_id=my_peer,
+        button=types.BotMenuButtonWebApp(
+            text="Карина App 📱",
+            url="https://tg-emoji-status-bot-production.up.railway.app/"
+        )
     ))
     # ================================================
     
