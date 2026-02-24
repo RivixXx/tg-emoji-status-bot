@@ -5,6 +5,7 @@ Marzban VPN API Client
 """
 import logging
 import httpx
+import uuid
 from typing import Optional, Dict
 from brains.config import MARZBAN_URL, MARZBAN_USER, MARZBAN_PASS
 from brains.exceptions import (
@@ -101,13 +102,21 @@ class MarzbanClient:
         from datetime import datetime, timedelta
         expire_date = datetime.now() + timedelta(days=expire_days)
 
+        # Генерируем уникальный UUID для VLESS
+        new_uuid = str(uuid.uuid4())
+
         # Формируем данные нового пользователя
         user_payload = {
             "username": username,
             "expire": int(expire_date.timestamp()),
             "data_limit": 0,  # Без лимита трафика
             "proxies": {
-                "vless": {}
+                "vless": {
+                    "id": new_uuid  # Генерируем уникальный ключ
+                }
+            },
+            "inbounds": {
+                "VLESS TCP REALITY": ["VLESS TCP REALITY"]
             }
         }
 
@@ -214,24 +223,22 @@ class MarzbanClient:
     def _extract_vless_link(self, data: Dict) -> str:
         """Извлекает VLESS ссылку из ответа Marzban"""
         try:
-            # Marzban возвращает ссылки в поле links
+            # Приоритет 1: Прямая VLESS ссылка из links
             if "links" in data and data["links"]:
-                # Ищем VLESS ссылку в списке
                 for link in data["links"]:
                     if link.startswith("vless://"):
+                        logger.info(f"✅ Найдена прямая VLESS ссылка")
                         return link
 
-            # Альтернативно: subscription_url содержит все конфиги
+            # Приоритет 2: Subscription URL (если links нет)
             if "subscription_url" in data:
                 sub_url = data["subscription_url"]
                 
                 # Если ссылка относительная (начинается с /), добавляем базовый URL
                 if sub_url.startswith("/"):
-                    # Используем внешний IP для доступа из интернета
                     base_url = self.base_url.replace("127.0.0.1", "108.165.174.164").replace("localhost", "108.165.174.164")
                     return f"{base_url}{sub_url}"
                 else:
-                    # Если ссылка абсолютная, но содержит 127.0.0.1 или localhost — заменяем
                     return sub_url.replace("127.0.0.1", "108.165.174.164").replace("localhost", "108.165.174.164")
 
             # Если ничего не найдено
