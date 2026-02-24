@@ -2,484 +2,1511 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Karina Admin Panel</title>
-    
-    <!-- Telegram Web App SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-    <!-- Скрипты -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OverSecure - Кибербезопасность нового поколения</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
+    <link href="https://cdn.jsdelivr.net/npm/fontsource-inter@5.0.0/index.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366f1',
+                        secondary: '#8b5cf6',
+                        accent: '#06b6d4',
+                        dark: '#0f172a',
+                        darker: '#020617'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif']
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'float-delayed': 'float 6s ease-in-out 3s infinite',
+                        'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
+                        'spin-slow': 'spin 12s linear infinite',
+                        'spin-reverse': 'spin 8s linear infinite reverse',
+                        'bounce-slow': 'bounce 3s infinite',
+                        'ping-slow': 'ping 3s cubic-bezier(0, 0, 0.2, 1) infinite',
+                        'gradient': 'gradient 8s ease infinite',
+                        'slide-up': 'slideUp 0.6s ease-out',
+                        'slide-down': 'slideDown 0.6s ease-out',
+                        'fade-in': 'fadeIn 0.8s ease-out',
+                        'scale-in': 'scaleIn 0.5s ease-out',
+                        'rotate': 'rotate 20s linear infinite',
+                        'pulse-ring': 'pulseRing 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'shimmer': 'shimmer 2s linear infinite',
+                        'wave': 'wave 5s ease-in-out infinite',
+                        'orbit': 'orbit 20s linear infinite',
+                        'glitch': 'glitch 2s infinite',
+                        'typewriter': 'typewriter 2s steps(40) forwards',
+                        'blink': 'blink 1s step-end infinite'
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-20px)' }
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { boxShadow: '0 0 20px rgba(99, 102, 241, 0.3)' },
+                            '50%': { boxShadow: '0 0 40px rgba(99, 102, 241, 0.6)' }
+                        },
+                        gradient: {
+                            '0%, 100%': { backgroundPosition: '0% 50%' },
+                            '50%': { backgroundPosition: '100% 50%' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(30px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        slideDown: {
+                            '0%': { transform: 'translateY(-30px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        scaleIn: {
+                            '0%': { transform: 'scale(0.8)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        },
+                        rotate: {
+                            '0%': { transform: 'rotate(0deg)' },
+                            '100%': { transform: 'rotate(360deg)' }
+                        },
+                        pulseRing: {
+                            '0%': { transform: 'scale(0.8)', opacity: '0.5' },
+                            '100%': { transform: 'scale(2)', opacity: '0' }
+                        },
+                        shimmer: {
+                            '0%': { backgroundPosition: '-200% 0' },
+                            '100%': { backgroundPosition: '200% 0' }
+                        },
+                        wave: {
+                            '0%, 100%': { transform: 'rotate(0deg)' },
+                            '25%': { transform: 'rotate(10deg)' },
+                            '75%': { transform: 'rotate(-10deg)' }
+                        },
+                        orbit: {
+                            '0%': { transform: 'rotate(0deg) translateX(100px) rotate(0deg)' },
+                            '100%': { transform: 'rotate(360deg) translateX(100px) rotate(-360deg)' }
+                        },
+                        glitch: {
+                            '0%': { transform: 'translate(0)' },
+                            '20%': { transform: 'translate(-2px, 2px)' },
+                            '40%': { transform: 'translate(-2px, -2px)' },
+                            '60%': { transform: 'translate(2px, 2px)' },
+                            '80%': { transform: 'translate(2px, -2px)' },
+                            '100%': { transform: 'translate(0)' }
+                        },
+                        typewriter: {
+                            '0%': { width: '0' },
+                            '100%': { width: '100%' }
+                        },
+                        blink: {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        /* Базовые стили для надежности */
-        body, html {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: #020617;
-            color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            transition: background 0.5s ease;
+        * {
+            font-family: 'Inter', sans-serif;
         }
-
-        /* Фон с Кариной - динамический градиент */
-        .bg-karina {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(2, 6, 23, 0.9)), url('karina.jpg');
-            background-size: cover; background-position: center;
-            z-index: -1;
-            transition: background 0.5s ease;
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+            background-size: 200% 200%;
+            animation: gradient 8s ease infinite;
         }
-
-        /* Пузыри */
-        .bubble {
-            position: absolute; border-radius: 50%;
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            cursor: pointer; transition: transform 0.2s, border-color 0.3s, box-shadow 0.3s;
-            box-shadow: inset 0 4px 15px rgba(255,255,255,0.1), 0 10px 20px rgba(0,0,0,0.3);
-            animation: float 12s infinite ease-in-out;
-            pointer-events: auto;
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient 5s ease infinite;
         }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0) translateX(0); }
-            33% { transform: translateY(-40px) translateX(20px); }
-            66% { transform: translateY(-20px) translateX(-20px); }
-        }
-
-        /* Карточка Glassmorphism */
-        .glass-card {
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
-            padding: 24px;
-            width: 90%; max-width: 400px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .pop-effect { animation: pop 0.3s forwards; }
-        @keyframes pop {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.3); opacity: 0.5; }
-            100% { transform: scale(0); opacity: 0; }
-        }
-
-        .scroll-hide::-webkit-scrollbar { display: none; }
-        .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
-
-        /* Индикатор эмоции */
-        .emotion-indicator {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(10px);
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            z-index: 100;
+        
+        .card-hover {
             transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.2);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            background-size: 200% 200%;
+            transition: all 0.3s ease;
+            animation: gradient 5s ease infinite;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+        
+        .nav-link {
+            position: relative;
+        }
+        
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            transition: width 0.3s ease;
+        }
+        
+        .nav-link:hover::after {
+            width: 100%;
+        }
+        
+        .feature-icon {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        }
+        
+        .pricing-card {
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .pricing-card:hover {
+            border-color: #6366f1;
+            transform: scale(1.02);
+        }
+        
+        .pricing-card.popular {
+            border-color: #6366f1;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+        }
+        
+        .stat-number {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .mobile-menu {
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .mobile-menu.active {
+            transform: translateX(0);
+        }
+        
+        .scroll-smooth {
+            scroll-behavior: smooth;
+        }
+        
+        /* Animated Background Particles */
+        .particles-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            opacity: 0.3;
+            animation: float 10s ease-in-out infinite;
+        }
+        
+        /* SVG Icon Animations */
+        .icon-shield {
+            animation: pulse-glow 3s ease-in-out infinite;
+        }
+        
+        .icon-shield path {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: dash 3s ease-in-out infinite;
+        }
+        
+        @keyframes dash {
+            0%, 100% { stroke-dashoffset: 100; }
+            50% { stroke-dashoffset: 0; }
+        }
+        
+        .icon-monitor {
+            animation: wave 2s ease-in-out infinite;
+        }
+        
+        .icon-lock {
+            animation: rotate 10s linear infinite;
+            transform-origin: center;
+        }
+        
+        .icon-chart {
+            animation: float 4s ease-in-out infinite;
+        }
+        
+        .icon-lightning {
+            animation: pulse-glow 1.5s ease-in-out infinite;
+        }
+        
+        .icon-users {
+            animation: float-delayed 4s ease-in-out infinite;
+        }
+        
+        /* Hero Background Animation */
+        .hero-bg {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 50% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 50%);
+            animation: gradient 10s ease infinite;
+            background-size: 200% 200%;
+        }
+        
+        /* Grid Pattern Animation */
+        .grid-pattern {
+            background-image: 
+                linear-gradient(rgba(99, 102, 241, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(99, 102, 241, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+        }
+        
+        @keyframes gridMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 50px 50px; }
+        }
+        
+        /* Circuit Board Animation */
+        .circuit-line {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: circuitFlow 3s ease-in-out infinite;
+        }
+        
+        @keyframes circuitFlow {
+            0% { stroke-dashoffset: 100; }
+            50% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: -100; }
+        }
+        
+        /* Pulse Ring Animation */
+        .pulse-ring {
+            position: absolute;
+            border: 2px solid rgba(99, 102, 241, 0.5);
+            border-radius: 50%;
+            animation: pulseRing 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        /* Glowing Orb Animation */
+        .glowing-orb {
+            filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.5));
+            animation: pulse-glow 3s ease-in-out infinite;
+        }
+        
+        /* Scan Line Animation */
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #6366f1, transparent);
+            animation: scan 3s ease-in-out infinite;
+        }
+        
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            50% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        
+        /* Data Flow Animation */
+        .data-flow {
+            stroke-dasharray: 20;
+            stroke-dashoffset: 20;
+            animation: dataFlow 2s linear infinite;
+        }
+        
+        @keyframes dataFlow {
+            to { stroke-dashoffset: 0; }
+        }
+        
+        /* Floating Elements */
+        .floating-element {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .floating-element-delayed {
+            animation: float 6s ease-in-out 3s infinite;
+        }
+        
+        /* Shimmer Effect */
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 2s linear infinite;
+        }
+        
+        /* Scroll Animation Classes */
+        .scroll-animate {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.6s ease-out;
+        }
+        
+        .scroll-animate.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Typing Effect */
+        .typing-text {
+            overflow: hidden;
+            border-right: 3px solid #6366f1;
+            white-space: nowrap;
+            animation: typewriter 2s steps(40) forwards, blink 1s step-end infinite;
+        }
+        
+        /* Radar Animation */
+        .radar {
+            position: relative;
+        }
+        
+        .radar::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            border: 2px solid rgba(99, 102, 241, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: radar 2s linear infinite;
+        }
+        
+        @keyframes radar {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+        
+        /* Binary Code Rain */
+        .binary-rain {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        
+        .binary-column {
+            position: absolute;
+            top: -100%;
+            color: rgba(99, 102, 241, 0.3);
+            font-family: monospace;
+            font-size: 14px;
+            animation: binaryFall 10s linear infinite;
+        }
+        
+        @keyframes binaryFall {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(1000%); }
+        }
+        
+        /* Hexagon Pattern */
+        .hexagon {
+            animation: float 8s ease-in-out infinite;
+        }
+        
+        /* Connection Lines */
+        .connection-line {
+            stroke-dasharray: 10;
+            animation: connectionFlow 3s linear infinite;
+        }
+        
+        @keyframes connectionFlow {
+            to { stroke-dashoffset: -20; }
+        }
+        
+        /* Spotlight Effect */
+        .spotlight {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .spotlight::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+            animation: spotlight 8s ease-in-out infinite;
+        }
+        
+        @keyframes spotlight {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(20%, 20%); }
+            50% { transform: translate(-20%, 20%); }
+            75% { transform: translate(-20%, -20%); }
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        
+        /* Morphing Shape */
+        .morph-shape {
+            animation: morph 8s ease-in-out infinite;
+        }
+        
+        @keyframes morph {
+            0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+            50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
         }
     </style>
 </head>
-<body>
-    <div class="bg-karina"></div>
-    <div id="root"></div>
-    <div id="emotion-indicator" class="emotion-indicator" style="display: none;"></div>
+<body class="bg-darker text-white scroll-smooth">
+    <!-- Animated Background -->
+    <div class="fixed inset-0 pointer-events-none z-0">
+        <div class="grid-pattern absolute inset-0"></div>
+        <div class="particles-container">
+            <div class="particle w-4 h-4" style="top: 10%; left: 10%; animation-delay: 0s;"></div>
+            <div class="particle w-6 h-6" style="top: 20%; left: 80%; animation-delay: 1s;"></div>
+            <div class="particle w-3 h-3" style="top: 40%; left: 30%; animation-delay: 2s;"></div>
+            <div class="particle w-5 h-5" style="top: 60%; left: 70%; animation-delay: 3s;"></div>
+            <div class="particle w-4 h-4" style="top: 80%; left: 20%; animation-delay: 4s;"></div>
+            <div class="particle w-3 h-3" style="top: 30%; left: 90%; animation-delay: 5s;"></div>
+            <div class="particle w-5 h-5" style="top: 70%; left: 50%; animation-delay: 6s;"></div>
+            <div class="particle w-4 h-4" style="top: 50%; left: 10%; animation-delay: 7s;"></div>
+        </div>
+    </div>
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-
-        console.log("🚀 Mini App: Запуск приложения...");
-        
-        // Инициализация Telegram Web App
-        const tg = window.Telegram?.WebApp;
-        console.log("📱 Telegram WebApp:", tg ? "найден" : "НЕ найден");
-        
-        if (tg) {
-            console.log("ℹ️ Telegram theme:", tg.themeParams);
-            tg.ready();
-            tg.expand();
-            console.log("✅ Telegram WebApp инициализирован");
-        } else {
-            console.warn("⚠️ Запуск вне Telegram");
-        }
-
-        // Цветовые темы для эмоций
-        const EMOTION_THEMES = {
-            neutral: { primary: "#38bdf8", secondary: "#94a3b8", bg: "linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(2, 6, 23, 0.9))" },
-            positive: { primary: "#4ade80", secondary: "#2dd4bf", bg: "linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(20, 83, 45, 0.9))" },
-            excited: { primary: "#facc15", secondary: "#fb923c", bg: "linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(113, 63, 18, 0.9))" },
-            sad: { primary: "#60a5fa", secondary: "#818cf8", bg: "linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(30, 58, 138, 0.9))" },
-            angry: { primary: "#f87171", secondary: "#dc2626", bg: "linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(127, 29, 29, 0.9))" },
-            romantic: { primary: "#fb7185", secondary: "#e879f9", bg: "linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(131, 24, 67, 0.9))" },
-            work: { primary: "#a78bfa", secondary: "#6366f1", bg: "linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(49, 46, 129, 0.9))" }
-        };
-
-        const Bubble = ({ icon, label, onClick, delay, size, top, left, color }) => {
-            const [popped, setPopped] = useState(false);
-            
-            const handleClick = (e) => {
-                e.stopPropagation();
-                setPopped(true);
-                setTimeout(() => {
-                    onClick();
-                    setPopped(false);
-                }, 300);
-            };
-
-            return (
-                <div 
-                    className={`bubble ${popped ? 'pop-effect' : ''}`}
-                    style={{ 
-                        width: size, height: size, top: top, left: left,
-                        animationDelay: delay, borderTop: `2px solid ${color}`
-                    }}
-                    onClick={handleClick}
-                >
-                    <i className={`fa-solid ${icon} text-2xl mb-1`} style={{ color: color }}></i>
-                    <span className="text-[10px] font-bold uppercase tracking-tighter" style={{ color: color }}>{label}</span>
-                </div>
-            );
-        };
-
-        const App = () => {
-            console.log("🎨 App: Рендер...");
-            
-            const [activeTab, setActiveTab] = useState(null);
-            const [status, setStatus] = useState({ emoji: '...', health_confirmed: true });
-            const [events, setEvents] = useState([]);
-            const [search, setSearch] = useState("");
-            const [memories, setMemories] = useState("");
-            const [emotion, setEmotion] = useState("neutral");
-            const [emotionTheme, setEmotionTheme] = useState(EMOTION_THEMES.neutral);
-            const [healthStats, setHealthStats] = useState(null);
-            const [isLoading, setIsLoading] = useState(true);
-            const [error, setError] = useState(null);
-
-            useEffect(() => {
-                console.log("🔄 App: Mount...");
-                initApp();
-            }, []);
-
-            const initApp = async () => {
-                try {
-                    console.log("📡 Загрузка данных...");
-                    await fetchData();
-                    await fetchEmotion();
-                    setIsLoading(false);
-                    console.log("✅ App: Данные загружены");
-                } catch (err) {
-                    console.error("❌ App: Ошибка инициализации:", err);
-                    setError(err.message);
-                    setIsLoading(false);
-                }
-            };
-
-            const fetchData = async () => {
-                try {
-                    const [resStatus, resCal] = await Promise.all([
-                        fetch('/api/status'),
-                        fetch('/api/calendar')
-                    ]);
-                    if (!resStatus.ok || !resCal.ok) {
-                        throw new Error(`HTTP error: ${resStatus.status}/${resCal.status}`);
-                    }
-                    setStatus(await resStatus.json());
-                    const calData = await resCal.json();
-                    setEvents(calData.events || []);
-                } catch (e) { 
-                    console.error("Data fetch error", e);
-                    // Показываем пользователю ошибку
-                    alert("Ошибка загрузки данных. Проверьте соединение.");
-                }
-            };
-
-            const fetchEmotion = async () => {
-                try {
-                    const res = await fetch('/api/emotion');
-                    if (!res.ok) {
-                        throw new Error(`HTTP error: ${res.status}`);
-                    }
-                    const data = await res.json();
-                    if (data.emotion) {
-                        setEmotion(data.emotion);
-                        const theme = EMOTION_THEMES[data.emotion] || EMOTION_THEMES.neutral;
-                        setEmotionTheme(theme);
-                        applyEmotionTheme(theme, data.emotion);
-                    }
-                } catch (e) { 
-                    console.error("Emotion fetch error", e);
-                }
-            };
-
-            const applyEmotionTheme = (theme, emotionName) => {
-                // Применяем градиент фона
-                document.querySelector('.bg-karina').style.background = theme.bg;
-                // Обновляем индикатор
-                const indicator = document.getElementById('emotion-indicator');
-                if (indicator) {
-                    indicator.style.display = 'block';
-                    indicator.style.color = theme.primary;
-                    indicator.style.borderColor = theme.primary;
-                    indicator.textContent = emotionName || emotion;
-                }
-            };
-
-            const handleSearch = async () => {
-                if (!search) return;
-                const res = await fetch(`/api/memory/search?q=${encodeURIComponent(search)}`);
-                const data = await res.json();
-                setMemories(data.results);
-            };
-
-            const fetchHealthStats = async () => {
-                try {
-                    const res = await fetch('/api/health?days=7');
-                    const data = await res.json();
-                    setHealthStats(data);
-                } catch (e) { console.error("Health stats error", e); }
-            };
-
-            const fetchEmotionTest = async (emotionName) => {
-                try {
-                    const res = await fetch('/api/emotion', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ emotion: emotionName })
-                    });
-                    const data = await res.json();
-                    if (data.emotion) {
-                        setEmotion(data.emotion);
-                        const theme = EMOTION_THEMES[data.emotion] || EMOTION_THEMES.neutral;
-                        setEmotionTheme(theme);
-                        applyEmotionTheme(theme, data.emotion);
-                    }
-                } catch (e) { console.error("Emotion test error", e); }
-            };
-            
-            // Проверка подключения
-            const [isOnline, setIsOnline] = useState(navigator.onLine);
-            
-            useEffect(() => {
-                const handleOnline = () => setIsOnline(true);
-                const handleOffline = () => setIsOnline(false);
-                window.addEventListener('online', handleOnline);
-                window.addEventListener('offline', handleOffline);
-                return () => {
-                    window.removeEventListener('online', handleOnline);
-                    window.removeEventListener('offline', handleOffline);
-                };
-            }, []);
-
-            return (
-                <div className="relative w-full h-full overflow-hidden">
-                    {/* Экран загрузки */}
-                    {isLoading && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#020617]">
-                            <div className="text-center">
-                                <div className="text-6xl mb-4 animate-pulse">🤖</div>
-                                <h2 className="text-2xl font-bold text-white mb-2">KARINA</h2>
-                                <p className="text-slate-400 text-sm">Загрузка...</p>
-                            </div>
-                        </div>
-                    )}
-                    
-                    {/* Экран ошибки */}
-                    {error && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#020617] p-6">
-                            <div className="text-center max-w-md">
-                                <div className="text-6xl mb-4">❌</div>
-                                <h2 className="text-xl font-bold text-white mb-2">Ошибка загрузки</h2>
-                                <p className="text-slate-400 text-sm mb-4">{error}</p>
-                                <button 
-                                    onClick={() => window.location.reload()}
-                                    className="bg-sky-500 px-6 py-3 rounded-xl font-bold hover:bg-sky-600 transition"
-                                >
-                                    Обновить
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                    
-                    {/* Индикатор подключения */}
-                    <div className={`absolute top-2 right-2 z-50 px-3 py-1 rounded-full text-xs font-bold ${isOnline ? 'bg-emerald-500/80 text-white' : 'bg-red-500/80 text-white'}`}>
-                        {isOnline ? '● Online' : '✕ Offline'}
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-darker/90 backdrop-blur-md border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-2">
+                    <div class="w-10 h-10 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center animate-pulse-glow">
+                        <svg class="w-6 h-6 text-white icon-shield" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
                     </div>
-
-                    {/* Главный экран */}
-                    {!isLoading && !error && (
-                        <div className="relative w-full h-full">
-                            <header className="absolute top-12 left-0 w-full text-center px-4">
-                                <h1 className="text-5xl font-black italic tracking-tighter text-white drop-shadow-2xl">KARINA</h1>
-                                <div className="h-1 w-20 bg-sky-500 mx-auto mt-2 rounded-full shadow-[0_0_10px_rgba(56,189,248,0.8)]"></div>
-                            </header>
-
-                            <Bubble icon="fa-calendar-check" label="Планы" size="100px" top="25%" left="10%" delay="0s" color="#38bdf8" onClick={() => setActiveTab('calendar')} />
-                            <Bubble icon="fa-brain" label="Память" size="110px" top="42%" left="52%" delay="2s" color="#c084fc" onClick={() => setActiveTab('memory')} />
-                            <Bubble icon="fa-heart-pulse" label="Статус" size="95px" top="65%" left="15%" delay="4s" color="#fb7185" onClick={() => setActiveTab('status')} />
-                            <Bubble icon="fa-chart-line" label="Здоровье" size="90px" top="60%" left="65%" delay="3s" color="#22c55e" onClick={() => setActiveTab('health')} />
-                            <Bubble icon="fa-gear" label="Опции" size="85px" top="18%" left="65%" delay="1s" color="#94a3b8" onClick={() => {}} />
-                        </div>
-                    )}
-
-                    {/* Модальное окно */}
-                    {!isLoading && !error && activeTab && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setActiveTab(null)}>
-                            <div className="glass-card" onClick={e => e.stopPropagation()}>
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-bold flex items-center gap-3">
-                                        <i className={`fa-solid ${activeTab === 'calendar' ? 'fa-calendar text-sky-400' : activeTab === 'memory' ? 'fa-brain text-purple-400' : 'fa-heart-pulse text-rose-400'}`}></i>
-                                        {activeTab === 'calendar' ? 'Ближайшие планы' : activeTab === 'memory' ? 'Память Карины' : 'Статус системы'}
-                                    </h2>
-                                    <button onClick={() => setActiveTab(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
-                                        <i className="fa-solid fa-times"></i>
-                                    </button>
-                                </div>
-
-                                {activeTab === 'calendar' && (
-                                    <div className="space-y-3 max-h-72 overflow-y-auto pr-2 scroll-hide">
-                                        {events.length > 0 ? events.map((ev, i) => (
-                                            <div key={i} className="bg-white/5 p-4 rounded-2xl border-l-4 border-sky-400 text-sm leading-relaxed">
-                                                {ev}
-                                            </div>
-                                        )) : <p className="text-center text-slate-400 italic py-8">Планов пока не найдено...</p>}
-                                    </div>
-                                )}
-
-                                {activeTab === 'memory' && (
-                                    <div>
-                                        <div className="flex gap-2 mb-4">
-                                            <input 
-                                                type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                                                placeholder="О чем вспомнить?" 
-                                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500"
-                                            />
-                                            <button onClick={handleSearch} className="bg-purple-500 w-12 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20">
-                                                <i className="fa-solid fa-search"></i>
-                                            </button>
-                                        </div>
-                                        {memories && (
-                                            <div className="bg-black/40 p-4 rounded-2xl text-xs text-slate-300 whitespace-pre-wrap max-h-48 overflow-y-auto border border-white/5">
-                                                {memories}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {activeTab === 'status' && (
-                                    <div>
-                                        <div className="grid grid-cols-2 gap-4 mb-4">
-                                            <div className="bg-white/5 p-5 rounded-3xl text-center border border-white/5 shadow-inner">
-                                                <p className="text-[10px] text-slate-400 uppercase font-black mb-2 tracking-widest">Аура</p>
-                                                <p className="text-4xl">{status.emoji || '✨'}</p>
-                                            </div>
-                                            <div className={`bg-white/5 p-5 rounded-3xl text-center border border-white/5 shadow-inner`}>
-                                                <p className="text-[10px] text-slate-400 uppercase font-black mb-2 tracking-widest">Здоровье</p>
-                                                <div className="flex flex-col items-center">
-                                                    <span className={`w-3 h-3 rounded-full mb-1 ${status.health_confirmed ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`}></span>
-                                                    <p className="text-sm font-bold uppercase tracking-tighter">{status.health_confirmed ? 'Норма' : 'Укол!'}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {/* Тест эмоций */}
-                                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                                            <p className="text-[10px] text-slate-400 uppercase font-black mb-3 tracking-widest">🎭 Тест эмоций</p>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                <button onClick={() => fetchEmotionTest('positive')} className="px-2 py-2 rounded-xl bg-green-500/20 border border-green-500 text-green-400 text-xs hover:bg-green-500/30">😊 Радость</button>
-                                                <button onClick={() => fetchEmotionTest('excited')} className="px-2 py-2 rounded-xl bg-yellow-500/20 border border-yellow-500 text-yellow-400 text-xs hover:bg-yellow-500/30">🔥 Огонь</button>
-                                                <button onClick={() => fetchEmotionTest('romantic')} className="px-2 py-2 rounded-xl bg-pink-500/20 border border-pink-500 text-pink-400 text-xs hover:bg-pink-500/30">💕 Романтика</button>
-                                                <button onClick={() => fetchEmotionTest('sad')} className="px-2 py-2 rounded-xl bg-blue-500/20 border border-blue-500 text-blue-400 text-xs hover:bg-blue-500/30">😢 Грусть</button>
-                                                <button onClick={() => fetchEmotionTest('angry')} className="px-2 py-2 rounded-xl bg-red-500/20 border border-red-500 text-red-400 text-xs hover:bg-red-500/30">😡 Злость</button>
-                                                <button onClick={() => fetchEmotionTest('work')} className="px-2 py-2 rounded-xl bg-purple-500/20 border border-purple-500 text-purple-400 text-xs hover:bg-purple-500/30">💼 Работа</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activeTab === 'health' && (
-                                    <div>
-                                        {healthStats ? (
-                                            <div>
-                                                {/* Основная статистика */}
-                                                <div className="grid grid-cols-3 gap-3 mb-4">
-                                                    <div className="bg-white/5 p-4 rounded-2xl text-center border border-emerald-500/30">
-                                                        <p className="text-[9px] text-slate-400 uppercase font-black mb-1">Всего</p>
-                                                        <p className="text-2xl font-bold text-white">{healthStats.total_days}</p>
-                                                        <p className="text-[9px] text-slate-500">дней</p>
-                                                    </div>
-                                                    <div className="bg-white/5 p-4 rounded-2xl text-center border border-emerald-500/30">
-                                                        <p className="text-[9px] text-slate-400 uppercase font-black mb-1">Успех</p>
-                                                        <p className="text-2xl font-bold text-emerald-400">{healthStats.confirmed_days}</p>
-                                                        <p className="text-[9px] text-slate-500">подтверждений</p>
-                                                    </div>
-                                                    <div className="bg-white/5 p-4 rounded-2xl text-center border border-emerald-500/30">
-                                                        <p className="text-[9px] text-slate-400 uppercase font-black mb-1">%</p>
-                                                        <p className={`text-2xl font-bold ${healthStats.success_rate >= 80 ? 'text-emerald-400' : healthStats.success_rate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{healthStats.success_rate}%</p>
-                                                        <p className="text-[9px] text-slate-500">успешность</p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Прогресс бар */}
-                                                <div className="mb-4">
-                                                    <div className="flex justify-between text-xs mb-2">
-                                                        <span className="text-slate-400">Прогресс за 7 дней</span>
-                                                        <span className="text-emerald-400 font-bold">{healthStats.success_rate}%</span>
-                                                    </div>
-                                                    <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
-                                                        <div className="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-500" style={{ width: `${healthStats.success_rate}%` }}></div>
-                                                    </div>
-                                                </div>
-
-                                                {/* История */}
-                                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2 scroll-hide">
-                                                    <p className="text-[10px] text-slate-400 uppercase font-black mb-2">История</p>
-                                                    {healthStats.daily_stats && healthStats.daily_stats.length > 0 ? (
-                                                        healthStats.daily_stats.slice(0, 7).map((day, i) => (
-                                                            <div key={i} className="flex items-center justify-between bg-white/5 p-3 rounded-xl border-l-4 border-emerald-500">
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className={`w-2 h-2 rounded-full ${day.confirmed ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-                                                                    <span className="text-sm text-slate-300">{day.date}</span>
-                                                                </div>
-                                                                <span className="text-xs text-slate-400">{day.time || 'N/A'}</span>
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <p className="text-center text-slate-400 italic py-4 text-sm">Нет данных за этот период</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center justify-center h-48">
-                                                <button onClick={fetchHealthStats} className="bg-emerald-500 px-6 py-3 rounded-2xl font-bold hover:bg-emerald-600 transition">
-                                                    Загрузить статистику
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                    <span class="text-xl font-bold gradient-text">OverSecure</span>
                 </div>
-            );
-        };
+                
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#features" class="nav-link text-gray-300 hover:text-white transition-colors">Возможности</a>
+                    <a href="#about" class="nav-link text-gray-300 hover:text-white transition-colors">О нас</a>
+                    <a href="#pricing" class="nav-link text-gray-300 hover:text-white transition-colors">Цены</a>
+                    <a href="#testimonials" class="nav-link text-gray-300 hover:text-white transition-colors">Отзывы</a>
+                    <a href="#contact" class="btn-primary px-6 py-2 rounded-lg font-semibold">Начать сейчас</a>
+                </div>
+                
+                <button id="mobile-menu-btn" class="md:hidden text-gray-300 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="mobile-menu fixed top-16 right-0 w-64 bg-darker border-l border-white/10 p-6 md:hidden">
+            <div class="flex flex-col space-y-4">
+                <a href="#features" class="text-gray-300 hover:text-white transition-colors">Возможности</a>
+                <a href="#about" class="text-gray-300 hover:text-white transition-colors">О нас</a>
+                <a href="#pricing" class="text-gray-300 hover:text-white transition-colors">Цены</a>
+                <a href="#testimonials" class="text-gray-300 hover:text-white transition-colors">Отзывы</a>
+                <a href="#contact" class="btn-primary px-6 py-2 rounded-lg font-semibold text-center">Начать сейчас</a>
+            </div>
+        </div>
+    </nav>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+    <!-- Hero Section -->
+    <section class="hero-bg min-h-screen flex items-center justify-center relative overflow-hidden">
+        <!-- Animated SVG Background Elements -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-20" viewBox="0 0 1000 1000">
+            <defs>
+                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.3" />
+                    <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:0.3" />
+                </linearGradient>
+            </defs>
+            <!-- Animated Circles -->
+            <circle cx="200" cy="200" r="150" fill="none" stroke="url(#grad1)" stroke-width="2" class="radar">
+                <animate attributeName="r" values="50;150;50" dur="4s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.5;0.1;0.5" dur="4s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="800" cy="300" r="100" fill="none" stroke="url(#grad1)" stroke-width="2" class="radar">
+                <animate attributeName="r" values="30;100;30" dur="5s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.4;0.1;0.4" dur="5s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="500" cy="700" r="120" fill="none" stroke="url(#grad1)" stroke-width="2" class="radar">
+                <animate attributeName="r" values="40;120;40" dur="6s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.3;0.1;0.3" dur="6s" repeatCount="indefinite" />
+            </circle>
+            
+            <!-- Animated Connection Lines -->
+            <line x1="200" y1="200" x2="800" y2="300" stroke="url(#grad1)" stroke-width="1" class="connection-line" opacity="0.5">
+                <animate attributeName="stroke-dashoffset" values="0;-20" dur="3s" repeatCount="indefinite" />
+            </line>
+            <line x1="800" y1="300" x2="500" y2="700" stroke="url(#grad1)" stroke-width="1" class="connection-line" opacity="0.5">
+                <animate attributeName="stroke-dashoffset" values="0;-20" dur="3s" repeatCount="indefinite" />
+            </line>
+            <line x1="500" y1="700" x2="200" y2="200" stroke="url(#grad1)" stroke-width="1" class="connection-line" opacity="0.5">
+                <animate attributeName="stroke-dashoffset" values="0;-20" dur="3s" repeatCount="indefinite" />
+            </line>
+            
+            <!-- Animated Hexagons -->
+            <polygon points="100,500 130,485 160,500 160,535 130,550 100,535" fill="none" stroke="url(#grad1)" stroke-width="2" class="hexagon" opacity="0.4">
+                <animateTransform attributeName="transform" type="rotate" from="0 130 517" to="360 130 517" dur="20s" repeatCount="indefinite" />
+            </polygon>
+            <polygon points="850,600 880,585 910,600 910,635 880,650 850,635" fill="none" stroke="url(#grad1)" stroke-width="2" class="hexagon" opacity="0.4" style="animation-delay: 2s;">
+                <animateTransform attributeName="transform" type="rotate" from="360 880 617" to="0 880 617" dur="25s" repeatCount="indefinite" />
+            </polygon>
+            
+            <!-- Animated Shield -->
+            <path d="M450,100 L550,100 L550,200 Q550,300 500,350 Q450,300 450,200 Z" fill="none" stroke="url(#grad1)" stroke-width="3" class="icon-shield" opacity="0.6">
+                <animate attributeName="stroke-dashoffset" values="400;0;400" dur="4s" repeatCount="indefinite" />
+            </path>
+        </svg>
+        
+        <!-- Binary Rain Effect -->
+        <div class="binary-rain" id="binaryRain"></div>
+        
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
+            <div class="text-center">
+                <div class="inline-block mb-6">
+                    <div class="relative">
+                        <div class="pulse-ring w-20 h-20 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                        <div class="w-20 h-20 bg-gradient-to-r from-primary to-secondary rounded-2xl flex items-center justify-center mx-auto glowing-orb">
+                            <svg class="w-10 h-10 text-white icon-shield" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <h1 class="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight scroll-animate">
+                    Защита вашего бизнеса<br>
+                    <span class="gradient-text">нового поколения</span>
+                </h1>
+                <p class="text-xl md:text-2xl text-gray-400 mb-8 max-w-3xl mx-auto scroll-animate">
+                    Комплексные решения кибербезопасности для современных компаний. 
+                    Защита данных, мониторинг угроз и быстрый ответ на инциденты.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center scroll-animate">
+                    <a href="#contact" class="btn-primary px-8 py-4 rounded-lg font-semibold text-lg relative overflow-hidden group">
+                        <span class="relative z-10">Получить консультацию</span>
+                        <div class="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </a>
+                    <a href="#features" class="px-8 py-4 rounded-lg font-semibold text-lg border border-white/20 hover:border-primary transition-colors relative overflow-hidden group">
+                        <span class="relative z-10">Узнать больше</span>
+                        <div class="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </a>
+                </div>
+                
+                <div class="mt-16 grid grid-cols-2 md:grid-cols-4 gap-8">
+                    <div class="text-center scroll-animate" style="transition-delay: 0.1s;">
+                        <div class="stat-number text-3xl md:text-4xl font-bold counter" data-target="500">0</div>
+                        <div class="text-gray-400 mt-2">Клиентов</div>
+                    </div>
+                    <div class="text-center scroll-animate" style="transition-delay: 0.2s;">
+                        <div class="stat-number text-3xl md:text-4xl font-bold">99.9%</div>
+                        <div class="text-gray-400 mt-2">Uptime</div>
+                    </div>
+                    <div class="text-center scroll-animate" style="transition-delay: 0.3s;">
+                        <div class="stat-number text-3xl md:text-4xl font-bold">24/7</div>
+                        <div class="text-gray-400 mt-2">Поддержка</div>
+                    </div>
+                    <div class="text-center scroll-animate" style="transition-delay: 0.4s;">
+                        <div class="stat-number text-3xl md:text-4xl font-bold counter" data-target="10">0</div>
+                        <div class="text-gray-400 mt-2">Лет опыта</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-darker to-transparent"></div>
+        
+        <!-- Scan Line -->
+        <div class="scan-line"></div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 bg-dark relative overflow-hidden">
+        <!-- Animated Background SVG -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-10" viewBox="0 0 1000 1000">
+            <defs>
+                <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.5" />
+                    <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:0.5" />
+                </linearGradient>
+            </defs>
+            <!-- Circuit Board Pattern -->
+            <path d="M100,100 L200,100 L200,150 L300,150 L300,200" fill="none" stroke="url(#grad2)" stroke-width="2" class="circuit-line"/>
+            <path d="M800,100 L700,100 L700,150 L600,150 L600,200" fill="none" stroke="url(#grad2)" stroke-width="2" class="circuit-line"/>
+            <path d="M100,800 L200,800 L200,750 L300,750 L300,700" fill="none" stroke="url(#grad2)" stroke-width="2" class="circuit-line"/>
+            <path d="M800,800 L700,800 L700,750 L600,750 L600,700" fill="none" stroke="url(#grad2)" stroke-width="2" class="circuit-line"/>
+            
+            <!-- Animated Dots -->
+            <circle cx="100" cy="100" r="5" fill="url(#grad2)">
+                <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="900" cy="100" r="5" fill="url(#grad2)">
+                <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite" />
+                <animate attributeName="cy" values="100;150;100" dur="3s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="100" cy="900" r="5" fill="url(#grad2)">
+                <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="900" cy="900" r="5" fill="url(#grad2)">
+                <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite" />
+                <animate attributeName="cx" values="900;850;900" dur="3s" repeatCount="indefinite" />
+            </circle>
+        </svg>
+        
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="text-center mb-16 scroll-animate">
+                <h2 class="text-3xl md:text-5xl font-bold mb-4">
+                    Наши <span class="gradient-text">возможности</span>
+                </h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto">
+                    Полный спектр услуг по кибербезопасности для защиты вашего бизнеса
+                </p>
+            </div>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="card-hover bg-darker p-8 rounded-2xl border border-white/10 scroll-animate spotlight">
+                    <div class="feature-icon w-14 h-14 rounded-xl flex items-center justify-center mb-6 icon-shield">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-4">Защита от угроз</h3>
+                    <p class="text-gray-400">
+                        Продвинутые системы обнаружения и предотвращения кибератак в реальном времени.
+                    </p>
+                </div>
+                
+                <div class="card-hover bg-darker p-8 rounded-2xl border border-white/10 scroll-animate spotlight">
+                    <div class="feature-icon w-14 h-14 rounded-xl flex items-center justify-center mb-6 icon-monitor">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-4">Мониторинг 24/7</h3>
+                    <p class="text-gray-400">
+                        Круглосуточный мониторинг инфраструктуры и быстрое реагирование на инциденты.
+                    </p>
+                </div>
+                
+                <div class="card-hover bg-darker p-8 rounded-2xl border border-white/10 scroll-animate spotlight">
+                    <div class="feature-icon w-14 h-14 rounded-xl flex items-center justify-center mb-6 icon-lock">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-4">Шифрование данных</h3>
+                    <p class="text-gray-400">
+                        Современное шифрование для защиты конфиденциальной информации вашего бизнеса.
+                    </p>
+                </div>
+                
+                <div class="card-hover bg-darker p-8 rounded-2xl border border-white/10 scroll-animate spotlight">
+                    <div class="feature-icon w-14 h-14 rounded-xl flex items-center justify-center mb-6 icon-chart">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-4">Аудит безопасности</h3>
+                    <p class="text-gray-400">
+                        Комплексная проверка инфраструктуры на уязвимости и соответствие стандартам.
+                    </p>
+                </div>
+                
+                <div class="card-hover bg-darker p-8 rounded-2xl border border-white/10 scroll-animate spotlight">
+                    <div class="feature-icon w-14 h-14 rounded-xl flex items-center justify-center mb-6 icon-lightning">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-4">Быстрый ответ</h3>
+                    <p class="text-gray-400">
+                        Оперативное реагирование на инциденты безопасности с минимизацией ущерба.
+                    </p>
+                </div>
+                
+                <div class="card-hover bg-darker p-8 rounded-2xl border border-white/10 scroll-animate spotlight">
+                    <div class="feature-icon w-14 h-14 rounded-xl flex items-center justify-center mb-6 icon-users">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-4">Обучение персонала</h3>
+                    <p class="text-gray-400">
+                        Программы повышения осведомленности сотрудников о кибербезопасности.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="py-20 bg-darker relative overflow-hidden">
+        <!-- Animated Background -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-10" viewBox="0 0 1000 1000">
+            <defs>
+                <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:0.5" />
+                    <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:0.5" />
+                </linearGradient>
+            </defs>
+            <!-- Orbiting Elements -->
+            <g class="orbit" style="transform-origin: 500px 500px;">
+                <circle cx="700" cy="500" r="10" fill="url(#grad3)">
+                    <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="300" cy="500" r="8" fill="url(#grad3)">
+                    <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite" />
+                    <animate attributeName="cx" values="300;350;300" dur="3s" repeatCount="indefinite" />
+                </circle>
+            </g>
+            
+            <!-- Animated Waves -->
+            <path d="M0,600 Q250,550 500,600 T1000,600" fill="none" stroke="url(#grad3)" stroke-width="2" opacity="0.3">
+                <animate attributeName="d" values="M0,600 Q250,550 500,600 T1000,600;M0,600 Q250,650 500,600 T1000,600;M0,600 Q250,550 500,600 T1000,600" dur="5s" repeatCount="indefinite" />
+            </path>
+            <path d="M0,700 Q250,650 500,700 T1000,700" fill="none" stroke="url(#grad3)" stroke-width="2" opacity="0.2">
+                <animate attributeName="d" values="M0,700 Q250,650 500,700 T1000,700;M0,700 Q250,750 500,700 T1000,700;M0,700 Q250,650 500,700 T1000,700" dur="6s" repeatCount="indefinite" />
+            </path>
+        </svg>
+        
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="grid lg:grid-cols-2 gap-12 items-center">
+                <div class="scroll-animate">
+                    <div class="relative">
+                        <div class="absolute -inset-4 bg-gradient-to-r from-primary to-secondary rounded-2xl opacity-20 blur-xl animate-pulse-glow"></div>
+                        <img src="https://image.qwenlm.ai/public_source/5ae0f527-029f-4733-b7dd-07d9fc75e9cc/1636150ff-3a4f-4db7-8cfd-9c42436732d3.png" alt="Команда OverSecure" class="rounded-2xl shadow-2xl animate-float relative z-10">
+                    </div>
+                </div>
+                <div class="scroll-animate">
+                    <h2 class="text-3xl md:text-5xl font-bold mb-6">
+                        О компании <span class="gradient-text">OverSecure</span>
+                    </h2>
+                    <p class="text-gray-400 text-lg mb-6">
+                        Мы — команда экспертов в области кибербезопасности с более чем 10-летним опытом работы. 
+                        Наша миссия — защитить ваш бизнес от современных киберугроз.
+                    </p>
+                    <p class="text-gray-400 text-lg mb-8">
+                        Используем передовые технологии и методики для обеспечения максимальной защиты 
+                        ваших данных и инфраструктуры.
+                    </p>
+                    
+                    <div class="grid grid-cols-2 gap-6">
+                        <div class="flex items-center space-x-3 group">
+                            <div class="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                            <span class="text-gray-300 group-hover:text-white transition-colors">Сертифицированные специалисты</span>
+                        </div>
+                        <div class="flex items-center space-x-3 group">
+                            <div class="w-2 h-2 bg-primary rounded-full animate-pulse" style="animation-delay: 0.5s;"></div>
+                            <span class="text-gray-300 group-hover:text-white transition-colors">Современные технологии</span>
+                        </div>
+                        <div class="flex items-center space-x-3 group">
+                            <div class="w-2 h-2 bg-primary rounded-full animate-pulse" style="animation-delay: 1s;"></div>
+                            <span class="text-gray-300 group-hover:text-white transition-colors">Индивидуальный подход</span>
+                        </div>
+                        <div class="flex items-center space-x-3 group">
+                            <div class="w-2 h-2 bg-primary rounded-full animate-pulse" style="animation-delay: 1.5s;"></div>
+                            <span class="text-gray-300 group-hover:text-white transition-colors">Гарантия качества</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Dashboard Preview -->
+    <section class="py-20 bg-dark relative overflow-hidden">
+        <!-- Animated Dashboard Background -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-10" viewBox="0 0 1000 1000">
+            <defs>
+                <linearGradient id="grad4" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.5" />
+                    <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:0.5" />
+                </linearGradient>
+            </defs>
+            <!-- Animated Data Flow Lines -->
+            <path d="M100,200 L300,200 L300,300 L500,300" fill="none" stroke="url(#grad4)" stroke-width="2" class="data-flow"/>
+            <path d="M900,200 L700,200 L700,300 L500,300" fill="none" stroke="url(#grad4)" stroke-width="2" class="data-flow"/>
+            <path d="M100,700 L300,700 L300,600 L500,600" fill="none" stroke="url(#grad4)" stroke-width="2" class="data-flow"/>
+            <path d="M900,700 L700,700 L700,600 L500,600" fill="none" stroke="url(#grad4)" stroke-width="2" class="data-flow"/>
+            
+            <!-- Animated Nodes -->
+            <circle cx="300" cy="200" r="8" fill="url(#grad4)">
+                <animate attributeName="r" values="6;10;6" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="700" cy="200" r="8" fill="url(#grad4)">
+                <animate attributeName="r" values="6;10;6" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="300" cy="700" r="8" fill="url(#grad4)">
+                <animate attributeName="r" values="6;10;6" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="700" cy="700" r="8" fill="url(#grad4)">
+                <animate attributeName="r" values="6;10;6" dur="2s" repeatCount="indefinite" />
+            </circle>
+        </svg>
+        
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="text-center mb-16 scroll-animate">
+                <h2 class="text-3xl md:text-5xl font-bold mb-4">
+                    Панель <span class="gradient-text">управления</span>
+                </h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto">
+                    Интуитивно понятный интерфейс для мониторинга и управления безопасностью
+                </p>
+            </div>
+            
+            <div class="relative scroll-animate">
+                <div class="absolute -inset-4 bg-gradient-to-r from-primary to-secondary rounded-2xl opacity-20 blur-xl animate-pulse-glow"></div>
+                <img src="https://image.qwenlm.ai/public_source/5ae0f527-029f-4733-b7dd-07d9fc75e9cc/15ac214a8-ee05-4fec-8310-3c15fe7c234b.png" alt="Панель управления OverSecure" class="rounded-2xl shadow-2xl relative z-10">
+                <div class="scan-line"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-20 bg-darker relative overflow-hidden">
+        <!-- Animated Background -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-10" viewBox="0 0 1000 1000">
+            <defs>
+                <linearGradient id="grad5" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.5" />
+                    <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:0.5" />
+                </linearGradient>
+            </defs>
+            <!-- Floating Pricing Elements -->
+            <rect x="150" y="150" width="100" height="100" fill="none" stroke="url(#grad5)" stroke-width="2" opacity="0.3" class="floating-element">
+                <animateTransform attributeName="transform" type="rotate" from="0 200 200" to="360 200 200" dur="30s" repeatCount="indefinite" />
+            </rect>
+            <rect x="750" y="150" width="80" height="80" fill="none" stroke="url(#grad5)" stroke-width="2" opacity="0.3" class="floating-element-delayed">
+                <animateTransform attributeName="transform" type="rotate" from="360 790 190" to="0 790 190" dur="25s" repeatCount="indefinite" />
+            </rect>
+            <rect x="150" y="750" width="80" height="80" fill="none" stroke="url(#grad5)" stroke-width="2" opacity="0.3" class="floating-element-delayed">
+                <animateTransform attributeName="transform" type="rotate" from="180 190 790" to="540 190 790" dur="35s" repeatCount="indefinite" />
+            </rect>
+            <rect x="750" y="750" width="100" height="100" fill="none" stroke="url(#grad5)" stroke-width="2" opacity="0.3" class="floating-element">
+                <animateTransform attributeName="transform" type="rotate" from="90 800 800" to="450 800 800" dur="40s" repeatCount="indefinite" />
+            </rect>
+        </svg>
+        
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="text-center mb-16 scroll-animate">
+                <h2 class="text-3xl md:text-5xl font-bold mb-4">
+                    Тарифные <span class="gradient-text">планы</span>
+                </h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto">
+                    Выберите подходящий план для вашего бизнеса
+                </p>
+            </div>
+            
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="pricing-card bg-dark p-8 rounded-2xl scroll-animate" style="transition-delay: 0.1s;">
+                    <h3 class="text-2xl font-bold mb-4">Старт</h3>
+                    <div class="mb-6">
+                        <span class="text-4xl font-bold">49 000</span>
+                        <span class="text-gray-400"> ₽/мес</span>
+                    </div>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Базовая защита</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.1s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Мониторинг 24/7</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.2s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">До 10 сотрудников</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.3s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Email поддержка</span>
+                        </li>
+                    </ul>
+                    <a href="#contact" class="block w-full py-3 px-6 rounded-lg border border-white/20 hover:border-primary transition-colors text-center font-semibold relative overflow-hidden group">
+                        <span class="relative z-10">Выбрать план</span>
+                        <div class="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </a>
+                </div>
+                
+                <div class="pricing-card popular bg-dark p-8 rounded-2xl relative scroll-animate" style="transition-delay: 0.2s;">
+                    <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                        <span class="bg-gradient-to-r from-primary to-secondary px-4 py-1 rounded-full text-sm font-semibold animate-pulse">Популярный</span>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">Бизнес</h3>
+                    <div class="mb-6">
+                        <span class="text-4xl font-bold">99 000</span>
+                        <span class="text-gray-400"> ₽/мес</span>
+                    </div>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Расширенная защита</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.1s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Мониторинг 24/7</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.2s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">До 50 сотрудников</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.3s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Приоритетная поддержка</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.4s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Ежемесячный аудит</span>
+                        </li>
+                    </ul>
+                    <a href="#contact" class="btn-primary block w-full py-3 px-6 rounded-lg font-semibold text-center relative overflow-hidden group">
+                        <span class="relative z-10">Выбрать план</span>
+                        <div class="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </a>
+                </div>
+                
+                <div class="pricing-card bg-dark p-8 rounded-2xl scroll-animate" style="transition-delay: 0.3s;">
+                    <h3 class="text-2xl font-bold mb-4">Корпорация</h3>
+                    <div class="mb-6">
+                        <span class="text-4xl font-bold">199 000</span>
+                        <span class="text-gray-400"> ₽/мес</span>
+                    </div>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Полная защита</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.1s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Мониторинг 24/7</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.2s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Неограниченно</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.3s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Персональный менеджер</span>
+                        </li>
+                        <li class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500 animate-scale-in" style="animation-delay: 0.4s;" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span class="text-gray-300">Индивидуальные решения</span>
+                        </li>
+                    </ul>
+                    <a href="#contact" class="block w-full py-3 px-6 rounded-lg border border-white/20 hover:border-primary transition-colors text-center font-semibold relative overflow-hidden group">
+                        <span class="relative z-10">Выбрать план</span>
+                        <div class="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section id="testimonials" class="py-20 bg-dark relative overflow-hidden">
+        <!-- Animated Background -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-10" viewBox="0 0 1000 1000">
+            <defs>
+                <linearGradient id="grad6" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:0.5" />
+                    <stop offset="100%" style="stop-color:#6366f1;stop-opacity:0.5" />
+                </linearGradient>
+            </defs>
+            <!-- Animated Stars -->
+            <g>
+                <circle cx="200" cy="300" r="3" fill="url(#grad6)">
+                    <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="500" cy="200" r="3" fill="url(#grad6)">
+                    <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="800" cy="300" r="3" fill="url(#grad6)">
+                    <animate attributeName="opacity" values="0.3;1;0.3" dur="1.8s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="300" cy="700" r="3" fill="url(#grad6)">
+                    <animate attributeName="opacity" values="0.3;1;0.3" dur="2.2s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="600" cy="800" r="3" fill="url(#grad6)">
+                    <animate attributeName="opacity" values="0.3;1;0.3" dur="1.7s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="900" cy="600" r="3" fill="url(#grad6)">
+                    <animate attributeName="opacity" values="0.3;1;0.3" dur="2.5s" repeatCount="indefinite" />
+                </circle>
+            </g>
+        </svg>
+        
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="text-center mb-16 scroll-animate">
+                <h2 class="text-3xl md:text-5xl font-bold mb-4">
+                    Отзывы <span class="gradient-text">клиентов</span>
+                </h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto">
+                    Что говорят о нас наши клиенты
+                </p>
+            </div>
+            
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="card-hover bg-darker p-8 rounded-2xl border border-white/10 scroll-animate" style="transition-delay: 0.1s;">
+                    <div class="flex items-center mb-4">
+                        <div class="flex text-yellow-500">
+                            <span class="animate-bounce" style="animation-delay: 0s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.1s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.2s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.3s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.4s;">★</span>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 mb-6">
+                        "OverSecure полностью изменили наш подход к безопасности. 
+                        Теперь мы спим спокойно, зная что наши данные под надежной защитой."
+                    </p>
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center font-bold animate-pulse">
+                            АИ
+                        </div>
+                        <div>
+                            <div class="font-semibold">Алексей Иванов</div>
+                            <div class="text-gray-400 text-sm">CEO, TechCorp</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-hover bg-darker p-8 rounded-2xl border border-white/10 scroll-animate" style="transition-delay: 0.2s;">
+                    <div class="flex items-center mb-4">
+                        <div class="flex text-yellow-500">
+                            <span class="animate-bounce" style="animation-delay: 0s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.1s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.2s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.3s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.4s;">★</span>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 mb-6">
+                        "Профессиональная команда и отличный сервис. 
+                        Реагирование на инциденты быстрое и эффективное."
+                    </p>
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center font-bold animate-pulse" style="animation-delay: 0.5s;">
+                            МП
+                        </div>
+                        <div>
+                            <div class="font-semibold">Мария Петрова</div>
+                            <div class="text-gray-400 text-sm">CTO, FinanceGroup</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-hover bg-darker p-8 rounded-2xl border border-white/10 scroll-animate" style="transition-delay: 0.3s;">
+                    <div class="flex items-center mb-4">
+                        <div class="flex text-yellow-500">
+                            <span class="animate-bounce" style="animation-delay: 0s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.1s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.2s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.3s;">★</span>
+                            <span class="animate-bounce" style="animation-delay: 0.4s;">★</span>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 mb-6">
+                        "Лучшее решение для нашего бизнеса. 
+                        Соотношение цены и качества превосходное."
+                    </p>
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center font-bold animate-pulse" style="animation-delay: 1s;">
+                            ДС
+                        </div>
+                        <div>
+                            <div class="font-semibold">Дмитрий Сидоров</div>
+                            <div class="text-gray-400 text-sm">Директор, RetailMax</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section id="contact" class="py-20 bg-darker relative overflow-hidden">
+        <!-- Animated Background -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-10" viewBox="0 0 1000 1000">
+            <defs>
+                <linearGradient id="grad7" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.5" />
+                    <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:0.5" />
+                </linearGradient>
+            </defs>
+            <!-- Animated Contact Elements -->
+            <circle cx="500" cy="500" r="200" fill="none" stroke="url(#grad7)" stroke-width="2" opacity="0.3">
+                <animate attributeName="r" values="150;250;150" dur="8s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.5;0.1;0.5" dur="8s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="500" cy="500" r="300" fill="none" stroke="url(#grad7)" stroke-width="2" opacity="0.2">
+                <animate attributeName="r" values="250;350;250" dur="10s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.4;0.1;0.4" dur="10s" repeatCount="indefinite" />
+            </circle>
+        </svg>
+        
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="text-center mb-12 scroll-animate">
+                <h2 class="text-3xl md:text-5xl font-bold mb-4">
+                    Готовы <span class="gradient-text">начать?</span>
+                </h2>
+                <p class="text-xl text-gray-400">
+                    Оставьте заявку и мы свяжемся с вами в течение 24 часов
+                </p>
+            </div>
+            
+            <form class="bg-dark p-8 rounded-2xl border border-white/10 scroll-animate spotlight">
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-gray-400 mb-2">Имя</label>
+                        <input type="text" class="w-full px-4 py-3 bg-darker border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors" placeholder="Ваше имя">
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 mb-2">Email</label>
+                        <input type="email" class="w-full px-4 py-3 bg-darker border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors" placeholder="your@email.com">
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-gray-400 mb-2">Компания</label>
+                    <input type="text" class="w-full px-4 py-3 bg-darker border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors" placeholder="Название компании">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-gray-400 mb-2">Сообщение</label>
+                    <textarea rows="4" class="w-full px-4 py-3 bg-darker border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors" placeholder="Расскажите о ваших потребностях"></textarea>
+                </div>
+                <button type="submit" class="btn-primary w-full py-4 rounded-lg font-semibold text-lg relative overflow-hidden group">
+                    <span class="relative z-10">Отправить заявку</span>
+                    <div class="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 bg-dark border-t border-white/10 relative overflow-hidden">
+        <!-- Animated Footer Background -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-5" viewBox="0 0 1000 1000">
+            <defs>
+                <linearGradient id="grad8" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.5" />
+                    <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:0.5" />
+                </linearGradient>
+            </defs>
+            <!-- Footer Pattern -->
+            <line x1="0" y1="100" x2="1000" y2="100" stroke="url(#grad8)" stroke-width="1" opacity="0.3"/>
+            <line x1="0" y1="200" x2="1000" y2="200" stroke="url(#grad8)" stroke-width="1" opacity="0.3"/>
+            <line x1="0" y1="300" x2="1000" y2="300" stroke="url(#grad8)" stroke-width="1" opacity="0.3"/>
+        </svg>
+        
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="grid md:grid-cols-4 gap-8 mb-8">
+                <div>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <div class="w-10 h-10 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center animate-pulse-glow">
+                            <svg class="w-6 h-6 text-white icon-shield" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                            </svg>
+                        </div>
+                        <span class="text-xl font-bold gradient-text">OverSecure</span>
+                    </div>
+                    <p class="text-gray-400">
+                        Защита вашего бизнеса от современных киберугроз.
+                    </p>
+                </div>
+                
+                <div>
+                    <h4 class="font-semibold mb-4">Услуги</h4>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#" class="hover:text-white transition-colors group">
+                            <span class="inline-block group-hover:translate-x-2 transition-transform">→</span> Защита от угроз
+                        </a></li>
+                        <li><a href="#" class="hover:text-white transition-colors group">
+                            <span class="inline-block group-hover:translate-x-2 transition-transform">→</span> Мониторинг
+                        </a></li>
+                        <li><a href="#" class="hover:text-white transition-colors group">
+                            <span class="inline-block group-hover:translate-x-2 transition-transform">→</span> Аудит безопасности
+                        </a></li>
+                        <li><a href="#" class="hover:text-white transition-colors group">
+                            <span class="inline-block group-hover:translate-x-2 transition-transform">→</span> Обучение
+                        </a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="font-semibold mb-4">Компания</h4>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#about" class="hover:text-white transition-colors group">
+                            <span class="inline-block group-hover:translate-x-2 transition-transform">→</span> О нас
+                        </a></li>
+                        <li><a href="#testimonials" class="hover:text-white transition-colors group">
+                            <span class="inline-block group-hover:translate-x-2 transition-transform">→</span> Отзывы
+                        </a></li>
+                        <li><a href="#" class="hover:text-white transition-colors group">
+                            <span class="inline-block group-hover:translate-x-2 transition-transform">→</span> Блог
+                        </a></li>
+                        <li><a href="#contact" class="hover:text-white transition-colors group">
+                            <span class="inline-block group-hover:translate-x-2 transition-transform">→</span> Контакты
+                        </a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="font-semibold mb-4">Контакты</h4>
+                    <ul class="space-y-2 text-gray-400">
+                        <li class="hover:text-white transition-colors cursor-pointer">info@oversecure.pro</li>
+                        <li class="hover:text-white transition-colors cursor-pointer">+7 (495) 123-45-67</li>
+                        <li class="hover:text-white transition-colors cursor-pointer">Москва, Россия</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center">
+                <p class="text-gray-400 text-sm">
+                    © 2024 OverSecure. Все права защищены.
+                </p>
+                <div class="flex space-x-6 mt-4 md:mt-0">
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors transform hover:scale-125">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/>
+                        </svg>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors transform hover:scale-125">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                        </svg>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors transform hover:scale-125">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
+        
+        mobileMenuBtn.addEventListener('click', () => {
+            mobileMenu.classList.toggle('active');
+        });
+        
+        // Close mobile menu when clicking on a link
+        const mobileLinks = mobileMenu.querySelectorAll('a');
+        mobileLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenu.classList.remove('active');
+            });
+        });
+        
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+        
+        // Form submission
+        const form = document.querySelector('form');
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            alert('Спасибо за заявку! Мы свяжемся с вами в ближайшее время.');
+            form.reset();
+        });
+        
+        // Navbar background on scroll
+        window.addEventListener('scroll', () => {
+            const nav = document.querySelector('nav');
+            if (window.scrollY > 50) {
+                nav.classList.add('bg-darker/95');
+            } else {
+                nav.classList.remove('bg-darker/95');
+            }
+        });
+        
+        // Scroll Animation Observer
+        const scrollAnimateElements = document.querySelectorAll('.scroll-animate');
+        
+        const scrollObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        });
+        
+        scrollAnimateElements.forEach(element => {
+            scrollObserver.observe(element);
+        });
+        
+        // Counter Animation
+        const counters = document.querySelectorAll('.counter');
+        
+        const counterObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const counter = entry.target;
+                    const target = parseInt(counter.getAttribute('data-target'));
+                    const duration = 2000;
+                    const step = target / (duration / 16);
+                    let current = 0;
+                    
+                    const updateCounter = () => {
+                        current += step;
+                        if (current < target) {
+                            counter.textContent = Math.floor(current);
+                            requestAnimationFrame(updateCounter);
+                        } else {
+                            counter.textContent = target;
+                            if (target === 500) {
+                                counter.textContent = '500+';
+                            } else if (target === 10) {
+                                counter.textContent = '10+';
+                            }
+                        }
+                    };
+                    
+                    updateCounter();
+                    counterObserver.unobserve(counter);
+                }
+            });
+        }, { threshold: 0.5 });
+        
+        counters.forEach(counter => {
+            counterObserver.observe(counter);
+        });
+        
+        // Binary Rain Effect
+        function createBinaryRain() {
+            const container = document.getElementById('binaryRain');
+            const columns = Math.floor(window.innerWidth / 20);
+            
+            for (let i = 0; i < columns; i++) {
+                const column = document.createElement('div');
+                column.className = 'binary-column';
+                column.style.left = (i * 20) + 'px';
+                column.style.animationDelay = (Math.random() * 5) + 's';
+                column.style.animationDuration = (5 + Math.random() * 10) + 's';
+                
+                let binary = '';
+                for (let j = 0; j < 50; j++) {
+                    binary += Math.random() > 0.5 ? '1' : '0';
+                    binary += '<br>';
+                }
+                column.innerHTML = binary;
+                
+                container.appendChild(column);
+            }
+        }
+        
+        createBinaryRain();
+        
+        // Parallax Effect for Floating Elements
+        window.addEventListener('scroll', () => {
+            const scrolled = window.scrollY;
+            const particles = document.querySelectorAll('.particle');
+            
+            particles.forEach((particle, index) => {
+                const speed = 0.1 + (index * 0.05);
+                particle.style.transform = `translateY(${scrolled * speed}px)`;
+            });
+        });
+        
+        // Add hover effect to feature cards
+        const featureCards = document.querySelectorAll('.card-hover');
+        
+        featureCards.forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-8px)';
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0)';
+            });
+        });
     </script>
 </body>
 </html>
+
