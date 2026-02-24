@@ -35,3 +35,7 @@ EMOJI_MAP = {
     'freetime': 5226893221191237996,
     'sleep': 5462990652943904884
 }
+
+# Marzban VPN API
+MARZBAN_URL = os.environ.get('MARZBAN_URL', 'http://108.165.174.164:8000')
+MARZBAN_ADMIN_TOKEN = os.environ.get('MARZBAN_ADMIN_TOKEN', '')

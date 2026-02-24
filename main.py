@@ -8,13 +8,14 @@ import logging
 import sys
 import time
 import signal
+import json
 from datetime import datetime
 from quart import Quart, jsonify, request
 import hypercorn.asyncio
 from hypercorn.config import Config
-from telethon import functions, types, events, TelegramClient
+from telethon import functions, types, events, TelegramClient, Button
 from telethon.sessions import StringSession
-from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION
+from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION, MY_ID
 from brains.memory import search_memories
 from brains.calendar import get_upcoming_events, get_conflict_report
 from brains.health import get_health_report_text, get_health_stats
@@ -26,13 +27,57 @@ from auras import state, start_auras
 from skills import register_karina_base_skills
 from plugins import plugin_manager
 
+# ========== СТРУКТУРИРОВАННОЕ ЛОГИРОВАНИЕ ==========
+
+class JSONFormatter(logging.Formatter):
+    """JSON формат для структурированных логов"""
+    
+    def format(self, record):
+        log_entry = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "module": record.module,
+            "function": record.funcName,
+            "line": record.lineno
+        }
+        
+        # Добавляем exception если есть
+        if record.exc_info:
+            log_entry["exception"] = self.formatException(record.exc_info)
+        
+        # Добавляем дополнительные поля
+        if hasattr(record, 'user_id'):
+            log_entry["user_id"] = record.user_id
+        if hasattr(record, 'chat_id'):
+            log_entry["chat_id"] = record.chat_id
+            
+        return json.dumps(log_entry, ensure_ascii=False)
+
+
 # Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    stream=sys.stdout
-)
+log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+log_format = os.environ.get('LOG_FORMAT', 'text')  # 'text' или 'json'
+
+if log_format == 'json':
+    json_handler = logging.StreamHandler(sys.stdout)
+    json_handler.setFormatter(JSONFormatter())
+    logging.basicConfig(
+        level=getattr(logging, log_level, logging.INFO),
+        handlers=[json_handler]
+    )
+else:
+    # Текстовый формат с цветами для разработки
+    logging.basicConfig(
+        format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+        level=getattr(logging, log_level, logging.INFO),
+        stream=sys.stdout
+    )
+
 logger = logging.getLogger(__name__)
+
+# ================================================
 
 # 🛡️ Фильтрация шумных предупреждений Telethon
 logging.getLogger('telethon.network.mtproto').setLevel(logging.ERROR)
@@ -63,6 +108,24 @@ METRICS = {
 # Ограничитель одновременных запросов к AI
 AI_SEMAPHORE = asyncio.Semaphore(5)
 SHUTDOWN_EVENT = asyncio.Event()
+
+# Rate limiter для API
+from brains.rate_limiter import rate_limiter, create_rate_limit_headers
+
+
+async def check_rate_limit(client_id: str, endpoint: str):
+    """Проверяет rate limit и возвращает ответ если превышен"""
+    allowed, retry_after = rate_limiter.is_allowed(client_id, endpoint)
+    
+    if not allowed:
+        headers = create_rate_limit_headers(client_id, endpoint)
+        from quart import jsonify
+        return jsonify({
+            "error": "Rate limit exceeded",
+            "retry_after": retry_after
+        }), 429, headers
+    
+    return None
 
 async def report_status(component: str, status: str):
     """Обновляет статус компонента (async-safe)"""
@@ -135,6 +198,12 @@ async def get_status():
 
 @app.route('/api/emotion', methods=['GET', 'POST'])
 async def api_emotion():
+    # Rate limiting
+    client_ip = request.remote_addr or "unknown"
+    rate_limit_response = await check_rate_limit(client_ip, "api/emotion")
+    if rate_limit_response:
+        return rate_limit_response
+    
     auth = request.headers.get("X-Karina-Secret")
     if request.method == 'POST' and auth != os.environ.get("KARINA_API_SECRET"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -206,6 +275,12 @@ async def api_plugin_settings(plugin_name):
 @app.route('/api/calendar')
 async def api_calendar():
     """Получить список событий календаря (для Mini App)"""
+    # Rate limiting
+    client_ip = request.remote_addr or "unknown"
+    rate_limit_response = await check_rate_limit(client_ip, "api/calendar")
+    if rate_limit_response:
+        return rate_limit_response
+    
     try:
         from brains.calendar import get_upcoming_events
         events = await get_upcoming_events(max_results=10)
@@ -223,10 +298,16 @@ async def api_calendar():
 @app.route('/api/memory/search')
 async def api_memory_search():
     """Поиск в памяти (для Mini App)"""
+    # Rate limiting
+    client_ip = request.remote_addr or "unknown"
+    rate_limit_response = await check_rate_limit(client_ip, "api/memory/search")
+    if rate_limit_response:
+        return rate_limit_response
+    
     query = request.args.get('q', '')
     if not query:
         return jsonify({"results": ""})
-    
+
     try:
         from brains.memory import search_memories
         results = await search_memories(query, limit=5)
@@ -238,6 +319,12 @@ async def api_memory_search():
 @app.route('/api/health')
 async def api_health_stats():
     """Статистика здоровья (для Mini App)"""
+    # Rate limiting
+    client_ip = request.remote_addr or "unknown"
+    rate_limit_response = await check_rate_limit(client_ip, "api/health")
+    if rate_limit_response:
+        return rate_limit_response
+    
     from brains.health import get_health_stats
     days = request.args.get('days', 7, type=int)
     
@@ -266,7 +353,166 @@ async def run_bot_main():
     """Основной цикл бота"""
     # Регистрируем скиллы из модуля skills
     register_karina_base_skills(bot_client)
-    
+
+    # ========== VPN SHOP LOGIC (ДВОЙНОЕ ДНО) ==========
+
+    @bot_client.on(events.NewMessage(func=lambda e: e.is_private and e.sender_id != MY_ID))
+    async def vpn_stranger_interceptor(event):
+        """Перехватывает все сообщения от чужих ID и показывает витрину VPN"""
+
+        # Инлайн-клавиатура с неоновым вайбом
+        keyboard = [
+            [Button.inline("🚀 Получить доступ", b"vpn_tariffs")],
+            [Button.inline("❔ Как это работает", b"vpn_info")]
+        ]
+
+        # Эстетика Dark sci-fi / Space UI в тексте
+        welcome_text = (
+            "🌌 **[ TERMINAL ACTIVE ]**\n\n"
+            "Приветствую. Я — Карина, цифровой интерфейс приватной сети.\n\n"
+            "⚡️ Высокоскоростное шифрованное соединение.\n"
+            "🛡 Обход любых систем DPI и блокировок (XTLS-Reality).\n"
+            "🇩🇪 Выделенный узел: Frankfurt.\n\n"
+            "Статус сети: `ONLINE`. Ожидание команды..."
+        )
+
+        await event.respond(welcome_text, buttons=keyboard)
+
+        # Останавливаем распространение события, чтобы другие хендлеры не сработали
+        raise events.StopPropagation
+
+    @bot_client.on(events.CallbackQuery(func=lambda e: e.sender_id != MY_ID))
+    async def vpn_callback_handler(event):
+        """Обработка нажатий на кнопки от клиентов"""
+        data = event.data.decode('utf-8')
+
+        if data == "vpn_tariffs":
+            keyboard = [
+                [Button.inline("💳 1 Месяц — 150 ₽", b"pay_1")],
+                [Button.inline("💳 3 Месяца — 400 ₽", b"pay_3")],
+                [Button.inline("◀️ Назад", b"vpn_back")]
+            ]
+            await event.edit(
+                "📂 **[ УРОВНИ ДОСТУПА ]**\n\n"
+                "Выберите период активации ключа. После оплаты система мгновенно сгенерирует ваш уникальный VLESS-токен.",
+                buttons=keyboard
+            )
+
+        elif data == "vpn_info":
+            keyboard = [[Button.inline("◀️ Назад", b"vpn_back")]]
+            await event.edit(
+                "ℹ️ **[ СПЕЦИФИКАЦИЯ ]**\n\n"
+                "Мы не используем устаревшие протоколы (OpenVPN, Wireguard). "
+                "Ваш трафик маскируется под обычные запросы к серверам Microsoft, "
+                "что делает его невидимым для провайдеров.\n\n"
+                "Поддерживаются устройства на iOS, Android, Windows и macOS.",
+                buttons=keyboard
+            )
+
+        elif data == "vpn_back":
+            keyboard = [
+                [Button.inline("🚀 Получить доступ", b"vpn_tariffs")],
+                [Button.inline("❔ Как это работает", b"vpn_info")]
+            ]
+            await event.edit("🌌 **[ ОЖИДАНИЕ ВВОДА ]**\n\nВыберите действие:", buttons=keyboard)
+
+        elif data.startswith("pay_"):
+            # Заглушка для системы оплаты
+            months = data.split("_")[1]
+            keyboard = [
+                [Button.inline("✅ Я оплатил", f"checkpay_{months}".encode())],
+                [Button.inline("◀️ Отмена", b"vpn_tariffs")]
+            ]
+            await event.edit(
+                f"⏳ **[ ИНИЦИАЛИЗАЦИЯ ТРАНЗАКЦИИ ]**\n\n"
+                f"Переведите сумму по номеру: `+7 (999) 000-00-00` (СБП).\n"
+                f"В комментарии ничего указывать не нужно.\n\n"
+                f"После перевода нажмите кнопку ниже для генерации ключа.",
+                buttons=keyboard
+            )
+
+        elif data.startswith("checkpay_"):
+            # Проверка оплаты и генерация ключа через Marzban API
+            months = int(data.split("_")[1])
+            sender_id = event.sender_id
+
+            try:
+                # Отправляем сообщение о проверке
+                await event.edit(
+                    "⏳ **[ ПРОВЕРКА ТРАНЗАКЦИИ ]**\n\n"
+                    "Соединение с платёжным шлюзом...\n"
+                    "Генерация криптографического ключа..."
+                )
+
+                # Генерируем ключ через Marzban
+                from brains.vpn_api import check_payment_and_issue_key
+                from brains.exceptions import VPNError, VPNUserExistsError, VPNConnectionError
+
+                result = await check_payment_and_issue_key(sender_id, months)
+
+                if result.get("success"):
+                    vless_key = result.get("vless_key")
+                    expire_days = result.get("expire_days", 30)
+
+                    await event.edit(
+                        "🟢 **[ ТРАНЗАКЦИЯ ПОДТВЕРЖДЕНА ]**\n\n"
+                        f"Ключ активирован на {expire_days} дней.\n\n"
+                        "Ваш токен доступа:\n"
+                        f"```\n{vless_key}\n```\n\n"
+                        "**Инструкция:**\n"
+                        "1. Скачайте приложение Hiddify или V2Box\n"
+                        "2. Скопируйте ключ выше\n"
+                        "3. В приложении выберите 'Добавить из буфера обмена'\n\n"
+                        "🔐 Подключение установлено. Добро пожаловать!"
+                    )
+                else:
+                    raise VPNError("Failed to generate key")
+
+            except VPNUserExistsError:
+                # Пользователь уже существует — пробуем получить ключ
+                from brains.vpn_api import marzban_client
+                user_data = await marzban_client.get_user(f"vpn_{sender_id}")
+                
+                if user_data and user_data.get("success"):
+                    await event.edit(
+                        "🟢 **[ КЛЮЧ АКТИВИРОВАН ]**\n\n"
+                        "Ваш ключ доступа (продление):\n"
+                        f"```\n{user_data.get('vless_link')}\n```\n\n"
+                        "🔐 Подключение восстановлено!"
+                    )
+                else:
+                    await event.edit(
+                        "🔴 **[ ОШИБКА ]**\n\n"
+                        "Пользователь существует, но не удалось получить ключ.\n"
+                        "Обратитесь в поддержку: @support"
+                    )
+
+            except VPNConnectionError:
+                logger.error("VPN Connection error during key generation")
+                await event.edit(
+                    "🔴 **[ ОШИБКА СОЕДИНЕНИЯ ]**\n\n"
+                    "Не удалось подключиться к серверу генерации ключей.\n"
+                    "Пожалуйста, попробуйте позже или обратитесь в поддержку: @support"
+                )
+
+            except VPNError as e:
+                logger.error(f"VPN error: {e}")
+                await event.edit(
+                    "🔴 **[ ОШИБКА ]**\n\n"
+                    "Не удалось сгенерировать ключ доступа.\n"
+                    f"Детали: {str(e)}\n\n"
+                    "Пожалуйста, обратитесь в поддержку: @support"
+                )
+
+            except Exception as e:
+                logger.exception(f"Unexpected error in VPN key generation: {e}")
+                await event.edit(
+                    "🔴 **[ НЕИЗВЕСТНАЯ ОШИБКА ]**\n\n"
+                    "Произошла непредвиденная ошибка.\n"
+                    "Пожалуйста, обратитесь в поддержку: @support"
+                )
+    # ==================================================
+
     await bot_client.start(bot_token=KARINA_TOKEN)
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")

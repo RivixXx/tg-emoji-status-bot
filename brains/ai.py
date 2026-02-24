@@ -4,6 +4,8 @@ import json
 import asyncio
 import time
 from datetime import datetime
+from typing import List, Dict, Any
+
 from brains.config import MISTRAL_API_KEY
 from brains.memory import search_memories, save_memory
 from brains.calendar import create_event, get_upcoming_events, get_conflict_report
@@ -12,6 +14,7 @@ from brains.health import get_health_report_text
 from brains.employees import get_todays_birthdays
 from brains.mcp_tools import mcp_get_upcoming_birthdays
 from brains.clients import http_client, MISTRAL_URL, MISTRAL_EMBED_URL, MODEL_NAME
+from brains.chat_history import chat_history_cache
 
 logger = logging.getLogger(__name__)
 
@@ -335,21 +338,20 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     # Передаем chat_id для фильтрации памяти (SaaS ready)
     context_memory = await search_memories(prompt, user_id=chat_id)
-    
-    if chat_id not in CHATS_HISTORY:
-        CHATS_HISTORY[chat_id] = []
 
+    # Получаем историю из кэша
+    chat_history = await chat_history_cache.get(chat_id)
+    
     headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
 
     user_content = prompt
     if context_memory:
         user_content = f"КОНТЕКСТ ПАМЯТИ:\n{context_memory}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ: {prompt}"
 
-    CHATS_HISTORY[chat_id].append({"role": "user", "content": user_content})
-    if len(CHATS_HISTORY[chat_id]) > 10:
-        CHATS_HISTORY[chat_id] = CHATS_HISTORY[chat_id][-10:]
+    # Добавляем сообщение пользователя в историю
+    chat_history.append({"role": "user", "content": user_content})
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT.format(now=now_str)}] + CHATS_HISTORY[chat_id]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT.format(now=now_str)}] + chat_history
 
     try:
         # Используем глобальный http_client
@@ -363,139 +365,65 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
                 "temperature": 0.3
             }
         )
-        
+
         if not result:
             return "Мои мысли спутались... попробуй еще раз? 🧠"
-        
+
         message = result['choices'][0]['message']
 
         # Оптимизированный цикл обработки tool_calls
         if message.get("tool_calls"):
-            tool_responses = []
-            for tool_call in message["tool_calls"]:
-                func_name = tool_call["function"]["name"]
-                args = json.loads(tool_call["function"]["arguments"])
-                
-                logger.info(f"🛠 AI вызывает инструмент: {func_name}")
-                tool_result = "Ошибка выполнения инструмента"
-                
-                try:
-                    if func_name == "create_calendar_event":
-                        start_dt = datetime.fromisoformat(args["start_time"].replace('Z', ''))
-                        # Таймаут на выполнение инструмента
-                        success = await asyncio.wait_for(
-                            create_event(args["summary"], start_dt, args.get("duration", 30)), 
-                            timeout=15.0
-                        )
-                        tool_result = f"Сделано! ✅ Записала в календарь: {args['summary']} на {start_dt.strftime('%d.%m в %H:%M')}." if success else "Ошибка при создании события."
-                
-                    elif func_name == "get_upcoming_calendar_events":
-                        events_list = await asyncio.wait_for(
-                            get_upcoming_events(max_results=args.get("count", 5)),
-                            timeout=10.0
-                        )
-                        tool_result = f"Список ближайших планов:\n{events_list}"
-                    
-                    elif func_name == "get_weather_info":
-                        weather_data = await asyncio.wait_for(get_weather(), timeout=5.0)
-                        tool_result = f"Погода: {weather_data}"
-
-                    elif func_name == "check_calendar_conflicts":
-                        report = await asyncio.wait_for(get_conflict_report(), timeout=10.0)
-                        tool_result = f"Отчет по конфликтам:\n{report}"
-
-                    elif func_name == "get_health_stats":
-                        report = await asyncio.wait_for(get_health_report_text(args.get("days", 7)), timeout=10.0)
-                        tool_result = f"Статистика здоровья:\n{report}"
-
-                    elif func_name == "save_to_memory":
-                        fact = args["text"]
-                        success = await asyncio.wait_for(
-                            save_memory(fact, metadata={"source": "ai_chat", "user_id": chat_id}),
-                            timeout=10.0
-                        )
-                        tool_result = f"✅ Я всё запомнила! Теперь я буду знать, что: {fact}" if success else "Ошибка при сохранении в память."
-                    
-                    elif func_name == "check_employee_birthdays":
-                        celebrants = await asyncio.wait_for(get_todays_birthdays(), timeout=10.0)
-                        if not celebrants:
-                            tool_result = "Сегодня дней рождения нет. 😊"
-                        else:
-                            names = ", ".join([emp['full_name'] for emp in celebrants])
-                            tool_result = f"Да! Сегодня день рождения празднуют: {names}. 🥳 Не забудь поздравить!"
-
-                    elif func_name == "get_upcoming_employee_birthdays":
-                        days_period = args.get("days", 7)
-                        upcoming = await asyncio.wait_for(
-                            mcp_get_upcoming_birthdays(days_period),
-                            timeout=10.0
-                        )
-                        if not upcoming:
-                            tool_result = f"В ближайшие {days_period} дней дней рождения нет. 😊"
-                        else:
-                            lines = []
-                            for emp in upcoming:
-                                bd_date = emp.get('birthday', '')[5:]  # MM-DD
-                                days_left = emp.get('days_until', 0)
-                                lines.append(f"• {emp['full_name']} — {bd_date} (через {days_left} дн.)")
-                            tool_result = f"🎂 Ближайшие дни рождения:\n" + "\n".join(lines)
-
-                    elif func_name == "search_my_memories":
-                        from brains.mcp_tools import mcp_search_memories
-                        memories = await asyncio.wait_for(
-                            mcp_search_memories(
-                                args["query"],
-                                limit=args.get("limit", 5),
-                                user_id=chat_id
-                            ),
-                            timeout=10.0
-                        )
-                        if memories:
-                            tool_result = f"📚 Я вспомнила:\n{memories}"
-                        else:
-                            tool_result = "К сожалению, я не нашла ничего похожего в памяти. 🤔"
-
-                    elif func_name == "get_my_health_stats":
-                        from brains.mcp_tools import mcp_get_health_stats
-                        stats = await asyncio.wait_for(
-                            mcp_get_health_stats(user_id=chat_id, days=args.get("days", 7)),
-                            timeout=10.0
-                        )
-                        compliance = stats.get("compliance_rate", 0)
-                        tool_result = (
-                            f"📊 Статистика здоровья за {stats.get('period_days', 7)} дней:\n"
-                            f"✅ Подтверждено: {stats.get('confirmed', 0)}\n"
-                            f"❌ Пропущено: {stats.get('missed', 0)}\n"
-                            f"📈 Успешность: {compliance}%"
-                        )
-
-                    elif func_name == "list_my_active_reminders":
-                        from brains.mcp_tools import mcp_get_active_reminders
-                        reminders = await asyncio.wait_for(mcp_get_active_reminders(), timeout=10.0)
-                        if not reminders:
-                            tool_result = "📋 У тебя сейчас нет активных напоминаний. Отлично! 😊"
-                        else:
-                            lines = []
-                            for r in reminders:
-                                time_str = r.get("scheduled_time", "")[:16].replace("T", " ")
-                                lines.append(f"• {r.get('message', 'Напоминание')} ({time_str})")
-                            tool_result = f"🔔 Активные напоминания:\n" + "\n".join(lines)
-                except asyncio.TimeoutError:
-                    tool_result = f"Таймаут выполнения инструмента {func_name}"
-                    logger.error(f"⌛️ Tool timeout: {func_name}")
-
-                tool_responses.append(tool_result)
-
-            # Объединяем результаты всех инструментов
-            final_res = "\n\n".join(tool_responses)
-            CHATS_HISTORY[chat_id].append({"role": "assistant", "content": final_res})
-            return final_res
+            result_text = await _process_tool_calls(message["tool_calls"], chat_id)
+            return result_text
 
         response_text = message['content'].strip()
-        CHATS_HISTORY[chat_id].append({"role": "assistant", "content": response_text})
+        
+        # Сохраняем ответ в историю
+        chat_history.append({"role": "assistant", "content": response_text})
+        await chat_history_cache.set(chat_id, chat_history)
+        
         return response_text
-            
+
     except Exception as e:
         logger.error(f"Mistral connection error: {e}")
         ai_breaker.record_failure()
         return "Кажется, я потеряла связь со своим облачным разумом... 🔌 Попробуй чуть позже!"
+
+
+async def _process_tool_calls(tool_calls: list, chat_id: int) -> str:
+    """
+    Обрабатывает tool calls от AI
+
+    Args:
+        tool_calls: Список вызовов инструментов от Mistral
+        chat_id: ID чата для контекста
+
+    Returns:
+        Результат выполнения инструментов
+    """
+    from brains.ai_tools import tool_executor
+
+    tool_responses = []
+
+    for tool_call in tool_calls:
+        func_name = tool_call["function"]["name"]
+        args = json.loads(tool_call["function"]["arguments"])
+
+        # Выполняем инструмент через executor
+        tool_result = await tool_executor.execute_tool(
+            tool_name=func_name,
+            args=args,
+            user_id=chat_id
+        )
+
+        tool_responses.append(tool_result)
+
+    # Объединяем результаты всех инструментов
+    final_result = "\n\n".join(tool_responses)
+    
+    # Сохраняем в историю через кэш
+    chat_history = await chat_history_cache.get(chat_id)
+    chat_history.append({"role": "assistant", "content": final_result})
+    await chat_history_cache.set(chat_id, chat_history)
+
+    return final_result
