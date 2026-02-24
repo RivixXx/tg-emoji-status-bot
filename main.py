@@ -36,6 +36,8 @@ from brains.mcp_vpn_shop import (
     mcp_vpn_add_referral,
     mcp_vpn_get_referral_stats,
     mcp_vpn_create_order,
+    mcp_vpn_update_order,
+    mcp_vpn_update_balance,
     calculate_referral_commission
 )
 from auras import state, start_auras
