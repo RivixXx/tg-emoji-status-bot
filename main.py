@@ -507,17 +507,23 @@ async def run_bot_main():
         user_id = event.sender_id
         data = event.data.decode('utf-8')
         
-        # Если юзера почему-то нет в базе, кидаем в начало
-        if user_id not in vpn_users:
-            vpn_users[user_id] = {"state": "NEW", "email": None, "code": None}
+        # Получаем пользователя из БД
+        user = await mcp_vpn_get_user(user_id)
+        if not user:
+            # Если пользователя нет в базе — создаём
+            await mcp_vpn_create_user(user_id)
+            user = await mcp_vpn_get_user(user_id)
+            if not user:
+                await event.answer("⚠️ Ошибка. Попробуйте /start", alert=True)
+                return
 
         if data == "accept_offer":
-            vpn_users[user_id]["state"] = "WAITING_EMAIL"
+            await mcp_vpn_update_user_state(user_id, "WAITING_EMAIL")
             await event.edit("📧 **Для регистрации в системе необходим Email.**\n\nПожалуйста, введите вашу почту отправьте сообщением:")
             
         elif data == "decline_offer":
             await event.edit("❌ Регистрация отменена. Чтобы начать заново, отправьте любое сообщение.")
-            vpn_users[user_id]["state"] = "NEW"
+            await mcp_vpn_update_user_state(user_id, "NEW")
             
         elif data.startswith("pay_"):
             months = data.split("_")[1]
