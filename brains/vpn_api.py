@@ -223,7 +223,15 @@ class MarzbanClient:
 
             # Альтернативно: subscription_url содержит все конфиги
             if "subscription_url" in data:
-                return data["subscription_url"]
+                sub_url = data["subscription_url"]
+                
+                # Если ссылка относительная (начинается с /), добавляем базовый URL
+                if sub_url.startswith("/"):
+                    # Используем внешний IP для доступа из интернета
+                    base_url = self.base_url.replace("127.0.0.1", "108.165.174.164").replace("localhost", "108.165.174.164")
+                    return f"{base_url}{sub_url}"
+                else:
+                    return sub_url
 
             # Если ничего не найдено
             return "vless://error-link-not-found"

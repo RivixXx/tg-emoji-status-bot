@@ -9,6 +9,7 @@ import sys
 import time
 import signal
 import json
+import io
 from datetime import datetime
 from quart import Quart, jsonify, request
 import hypercorn.asyncio
@@ -18,6 +19,7 @@ from telethon.sessions import StringSession
 from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION, MY_ID
 from brains.memory import search_memories
 from brains.calendar import get_upcoming_events, get_conflict_report
+import qrcode
 from brains.health import get_health_report_text, get_health_stats
 from brains.reminders import reminder_manager, start_reminder_loop, ReminderType
 from brains.emotions import get_emotion_state, set_emotion
@@ -439,9 +441,10 @@ async def run_bot_main():
 
                 try:
                     # Отправляем сообщение о проверке
+                    processing_msg = await event.get_message()
                     await event.edit(
-                        "⏳ **[ ПРОВЕРКА ТРАНЗАКЦИИ ]**\n\n"
-                        "Соединение с платёжным шлюзом...\n"
+                        "⏳ **[ ГЕНЕРАЦИЯ КЛЮЧА ]**\n\n"
+                        "Соединение с сервером...\n"
                         "Генерация криптографического ключа..."
                     )
 
@@ -455,16 +458,41 @@ async def run_bot_main():
                         vless_key = result.get("vless_key")
                         expire_days = result.get("expire_days", 30)
 
-                        await event.edit(
+                        # Генерируем QR-код в памяти
+                        qr = qrcode.QRCode(
+                            version=1,
+                            error_correction=qrcode.constants.ERROR_CORRECT_L,
+                            box_size=10,
+                            border=2,
+                        )
+                        qr.add_data(vless_key)
+                        qr.make(fit=True)
+                        img = qr.make_image(fill_color="black", back_color="white")
+
+                        # Сохраняем в BytesIO
+                        bio = io.BytesIO()
+                        bio.name = 'vpn_qr.png'
+                        img.save(bio, 'PNG')
+                        bio.seek(0)
+
+                        # Формируем текст
+                        caption_text = (
                             "🟢 **[ ТРАНЗАКЦИЯ ПОДТВЕРЖДЕНА ]**\n\n"
                             f"Ключ активирован на {expire_days} дней.\n\n"
-                            "Ваш токен доступа:\n"
+                            "Ваша ссылка-подписка:\n"
                             f"```\n{vless_key}\n```\n\n"
                             "**Инструкция:**\n"
-                            "1. Скачайте приложение Hiddify или V2Box\n"
-                            "2. Скопируйте ключ выше\n"
-                            "3. В приложении выберите 'Добавить из буфера обмена'\n\n"
-                            "🔐 Подключение установлено. Добро пожаловать!"
+                            "1. Скачайте Hiddify или V2Box\n"
+                            "2. Скопируйте ссылку выше ИЛИ отсканируйте QR-код\n"
+                            "3. В приложении выберите 'Добавить из буфера обмена' или 'Сканировать QR'\n\n"
+                            "🔐 Добро пожаловать в сеть!"
+                        )
+
+                        # Отправляем с QR-кодом
+                        await bot_client.send_file(
+                            event.chat_id,
+                            file=bio,
+                            caption=caption_text
                         )
                     else:
                         raise VPNError("Failed to generate key")
@@ -475,11 +503,33 @@ async def run_bot_main():
                     user_data = await marzban_client.get_user(f"vpn_{sender_id}")
 
                     if user_data and user_data.get("success"):
-                        await event.edit(
-                            "🟢 **[ КЛЮЧ АКТИВИРОВАН ]**\n\n"
-                            "Ваш ключ доступа (продление):\n"
-                            f"```\n{user_data.get('vless_link')}\n```\n\n"
-                            "🔐 Подключение восстановлено!"
+                        vless_key = user_data.get('vless_link')
+                        
+                        # Генерируем QR-код для продления
+                        qr = qrcode.QRCode(
+                            version=1,
+                            error_correction=qrcode.constants.ERROR_CORRECT_L,
+                            box_size=10,
+                            border=2,
+                        )
+                        qr.add_data(vless_key)
+                        qr.make(fit=True)
+                        img = qr.make_image(fill_color="black", back_color="white")
+
+                        bio = io.BytesIO()
+                        bio.name = 'vpn_qr.png'
+                        img.save(bio, 'PNG')
+                        bio.seek(0)
+
+                        await bot_client.send_file(
+                            event.chat_id,
+                            file=bio,
+                            caption=(
+                                "🟢 **[ КЛЮЧ АКТИВИРОВАН ]**\n\n"
+                                "Ваш ключ доступа (продление):\n"
+                                f"```\n{vless_key}\n```\n\n"
+                                "🔐 Подключение восстановлено!"
+                            )
                         )
                     else:
                         await event.edit(
