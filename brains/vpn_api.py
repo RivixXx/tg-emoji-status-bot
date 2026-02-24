@@ -231,7 +231,8 @@ class MarzbanClient:
                     base_url = self.base_url.replace("127.0.0.1", "108.165.174.164").replace("localhost", "108.165.174.164")
                     return f"{base_url}{sub_url}"
                 else:
-                    return sub_url
+                    # Если ссылка абсолютная, но содержит 127.0.0.1 или localhost — заменяем
+                    return sub_url.replace("127.0.0.1", "108.165.174.164").replace("localhost", "108.165.174.164")
 
             # Если ничего не найдено
             return "vless://error-link-not-found"
