@@ -382,134 +382,141 @@ async def run_bot_main():
     @bot_client.on(events.CallbackQuery(func=lambda e: e.sender_id != MY_ID))
     async def vpn_callback_handler(event):
         """Обработка нажатий на кнопки от клиентов"""
+        from telethon.errors import MessageNotModifiedError
+        
         data = event.data.decode('utf-8')
 
-        if data == "vpn_tariffs":
-            keyboard = [
-                [Button.inline("💳 1 Месяц — 150 ₽", b"pay_1")],
-                [Button.inline("💳 3 Месяца — 400 ₽", b"pay_3")],
-                [Button.inline("◀️ Назад", b"vpn_back")]
-            ]
-            await event.edit(
-                "📂 **[ УРОВНИ ДОСТУПА ]**\n\n"
-                "Выберите период активации ключа. После оплаты система мгновенно сгенерирует ваш уникальный VLESS-токен.",
-                buttons=keyboard
-            )
-
-        elif data == "vpn_info":
-            keyboard = [[Button.inline("◀️ Назад", b"vpn_back")]]
-            await event.edit(
-                "ℹ️ **[ СПЕЦИФИКАЦИЯ ]**\n\n"
-                "Мы не используем устаревшие протоколы (OpenVPN, Wireguard). "
-                "Ваш трафик маскируется под обычные запросы к серверам Microsoft, "
-                "что делает его невидимым для провайдеров.\n\n"
-                "Поддерживаются устройства на iOS, Android, Windows и macOS.",
-                buttons=keyboard
-            )
-
-        elif data == "vpn_back":
-            keyboard = [
-                [Button.inline("🚀 Получить доступ", b"vpn_tariffs")],
-                [Button.inline("❔ Как это работает", b"vpn_info")]
-            ]
-            await event.edit("🌌 **[ ОЖИДАНИЕ ВВОДА ]**\n\nВыберите действие:", buttons=keyboard)
-
-        elif data.startswith("pay_"):
-            # Заглушка для системы оплаты
-            months = data.split("_")[1]
-            keyboard = [
-                [Button.inline("✅ Я оплатил", f"checkpay_{months}".encode())],
-                [Button.inline("◀️ Отмена", b"vpn_tariffs")]
-            ]
-            await event.edit(
-                f"⏳ **[ ИНИЦИАЛИЗАЦИЯ ТРАНЗАКЦИИ ]**\n\n"
-                f"Переведите сумму по номеру: `+7 (999) 000-00-00` (СБП).\n"
-                f"В комментарии ничего указывать не нужно.\n\n"
-                f"После перевода нажмите кнопку ниже для генерации ключа.",
-                buttons=keyboard
-            )
-
-        elif data.startswith("checkpay_"):
-            # Проверка оплаты и генерация ключа через Marzban API
-            months = int(data.split("_")[1])
-            sender_id = event.sender_id
-
-            try:
-                # Отправляем сообщение о проверке
+        try:
+            if data == "vpn_tariffs":
+                keyboard = [
+                    [Button.inline("💳 1 Месяц — 150 ₽", b"pay_1")],
+                    [Button.inline("💳 3 Месяца — 400 ₽", b"pay_3")],
+                    [Button.inline("◀️ Назад", b"vpn_back")]
+                ]
                 await event.edit(
-                    "⏳ **[ ПРОВЕРКА ТРАНЗАКЦИИ ]**\n\n"
-                    "Соединение с платёжным шлюзом...\n"
-                    "Генерация криптографического ключа..."
+                    "📂 **[ УРОВНИ ДОСТУПА ]**\n\n"
+                    "Выберите период активации ключа. После оплаты система мгновенно сгенерирует ваш уникальный VLESS-токен.",
+                    buttons=keyboard
                 )
 
-                # Генерируем ключ через Marzban
-                from brains.vpn_api import check_payment_and_issue_key
-                from brains.exceptions import VPNError, VPNUserExistsError, VPNConnectionError
+            elif data == "vpn_info":
+                keyboard = [[Button.inline("◀️ Назад", b"vpn_back")]]
+                await event.edit(
+                    "ℹ️ **[ СПЕЦИФИКАЦИЯ ]**\n\n"
+                    "Мы не используем устаревшие протоколы (OpenVPN, Wireguard). "
+                    "Ваш трафик маскируется под обычные запросы к серверам Microsoft, "
+                    "что делает его невидимым для провайдеров.\n\n"
+                    "Поддерживаются устройства на iOS, Android, Windows и macOS.",
+                    buttons=keyboard
+                )
 
-                result = await check_payment_and_issue_key(sender_id, months)
+            elif data == "vpn_back":
+                keyboard = [
+                    [Button.inline("🚀 Получить доступ", b"vpn_tariffs")],
+                    [Button.inline("❔ Как это работает", b"vpn_info")]
+                ]
+                await event.edit("🌌 **[ ОЖИДАНИЕ ВВОДА ]**\n\nВыберите действие:", buttons=keyboard)
 
-                if result.get("success"):
-                    vless_key = result.get("vless_key")
-                    expire_days = result.get("expire_days", 30)
+            elif data.startswith("pay_"):
+                # Заглушка для системы оплаты
+                months = data.split("_")[1]
+                keyboard = [
+                    [Button.inline("✅ Я оплатил", f"checkpay_{months}".encode())],
+                    [Button.inline("◀️ Отмена", b"vpn_tariffs")]
+                ]
+                await event.edit(
+                    f"⏳ **[ ИНИЦИАЛИЗАЦИЯ ТРАНЗАКЦИИ ]**\n\n"
+                    f"Переведите сумму по номеру: `+7 (999) 000-00-00` (СБП).\n"
+                    f"В комментарии ничего указывать не нужно.\n\n"
+                    f"После перевода нажмите кнопку ниже для генерации ключа.",
+                    buttons=keyboard
+                )
 
+            elif data.startswith("checkpay_"):
+                # Проверка оплаты и генерация ключа через Marzban API
+                months = int(data.split("_")[1])
+                sender_id = event.sender_id
+
+                try:
+                    # Отправляем сообщение о проверке
                     await event.edit(
-                        "🟢 **[ ТРАНЗАКЦИЯ ПОДТВЕРЖДЕНА ]**\n\n"
-                        f"Ключ активирован на {expire_days} дней.\n\n"
-                        "Ваш токен доступа:\n"
-                        f"```\n{vless_key}\n```\n\n"
-                        "**Инструкция:**\n"
-                        "1. Скачайте приложение Hiddify или V2Box\n"
-                        "2. Скопируйте ключ выше\n"
-                        "3. В приложении выберите 'Добавить из буфера обмена'\n\n"
-                        "🔐 Подключение установлено. Добро пожаловать!"
+                        "⏳ **[ ПРОВЕРКА ТРАНЗАКЦИИ ]**\n\n"
+                        "Соединение с платёжным шлюзом...\n"
+                        "Генерация криптографического ключа..."
                     )
-                else:
-                    raise VPNError("Failed to generate key")
 
-            except VPNUserExistsError:
-                # Пользователь уже существует — пробуем получить ключ
-                from brains.vpn_api import marzban_client
-                user_data = await marzban_client.get_user(f"vpn_{sender_id}")
+                    # Генерируем ключ через Marzban
+                    from brains.vpn_api import check_payment_and_issue_key
+                    from brains.exceptions import VPNError, VPNUserExistsError, VPNConnectionError
 
-                if user_data and user_data.get("success"):
+                    result = await check_payment_and_issue_key(sender_id, months)
+
+                    if result.get("success"):
+                        vless_key = result.get("vless_key")
+                        expire_days = result.get("expire_days", 30)
+
+                        await event.edit(
+                            "🟢 **[ ТРАНЗАКЦИЯ ПОДТВЕРЖДЕНА ]**\n\n"
+                            f"Ключ активирован на {expire_days} дней.\n\n"
+                            "Ваш токен доступа:\n"
+                            f"```\n{vless_key}\n```\n\n"
+                            "**Инструкция:**\n"
+                            "1. Скачайте приложение Hiddify или V2Box\n"
+                            "2. Скопируйте ключ выше\n"
+                            "3. В приложении выберите 'Добавить из буфера обмена'\n\n"
+                            "🔐 Подключение установлено. Добро пожаловать!"
+                        )
+                    else:
+                        raise VPNError("Failed to generate key")
+
+                except VPNUserExistsError:
+                    # Пользователь уже существует — пробуем получить ключ
+                    from brains.vpn_api import marzban_client
+                    user_data = await marzban_client.get_user(f"vpn_{sender_id}")
+
+                    if user_data and user_data.get("success"):
+                        await event.edit(
+                            "🟢 **[ КЛЮЧ АКТИВИРОВАН ]**\n\n"
+                            "Ваш ключ доступа (продление):\n"
+                            f"```\n{user_data.get('vless_link')}\n```\n\n"
+                            "🔐 Подключение восстановлено!"
+                        )
+                    else:
+                        await event.edit(
+                            "🔴 **[ ОШИБКА ]**\n\n"
+                            "Пользователь существует, но не удалось получить ключ.\n"
+                            "Обратитесь в поддержку: @support"
+                        )
+
+                except VPNConnectionError:
+                    logger.error("VPN Connection error during key generation")
                     await event.edit(
-                        "🟢 **[ КЛЮЧ АКТИВИРОВАН ]**\n\n"
-                        "Ваш ключ доступа (продление):\n"
-                        f"```\n{user_data.get('vless_link')}\n```\n\n"
-                        "🔐 Подключение восстановлено!"
+                        "🔴 **[ ОШИБКА СОЕДИНЕНИЯ ]**\n\n"
+                        "Не удалось подключиться к серверу генерации ключей.\n"
+                        "Пожалуйста, попробуйте позже или обратитесь в поддержку: @support"
                     )
-                else:
+
+                except VPNError as e:
+                    logger.error(f"VPN error: {e}")
                     await event.edit(
                         "🔴 **[ ОШИБКА ]**\n\n"
-                        "Пользователь существует, но не удалось получить ключ.\n"
-                        "Обратитесь в поддержку: @support"
+                        "Не удалось сгенерировать ключ доступа.\n"
+                        f"Детали: {str(e)}\n\n"
+                        "Пожалуйста, обратитесь в поддержку: @support"
                     )
 
-            except VPNConnectionError:
-                logger.error("VPN Connection error during key generation")
-                await event.edit(
-                    "🔴 **[ ОШИБКА СОЕДИНЕНИЯ ]**\n\n"
-                    "Не удалось подключиться к серверу генерации ключей.\n"
-                    "Пожалуйста, попробуйте позже или обратитесь в поддержку: @support"
-                )
-
-            except VPNError as e:
-                logger.error(f"VPN error: {e}")
-                await event.edit(
-                    "🔴 **[ ОШИБКА ]**\n\n"
-                    "Не удалось сгенерировать ключ доступа.\n"
-                    f"Детали: {str(e)}\n\n"
-                    "Пожалуйста, обратитесь в поддержку: @support"
-                )
-
-            except Exception as e:
-                logger.exception(f"Unexpected error in VPN key generation: {e}")
-                await event.edit(
-                    "🔴 **[ НЕИЗВЕСТНАЯ ОШИБКА ]**\n\n"
-                    "Произошла непредвиденная ошибка.\n"
-                    "Пожалуйста, обратитесь в поддержку: @support"
-                )
-    # ==================================================
+                except Exception as e:
+                    logger.exception(f"Unexpected error in VPN key generation: {e}")
+                    await event.edit(
+                        "🔴 **[ НЕИЗВЕСТНАЯ ОШИБКА ]**\n\n"
+                        "Произошла непредвиденная ошибка.\n"
+                        "Пожалуйста, обратитесь в поддержку: @support"
+                    )
+        except MessageNotModifiedError:
+            # Игнорируем ошибку "сообщение не изменено"
+            pass
+        except Exception as e:
+            logger.exception(f"Unexpected error in VPN callback: {e}")
 
     # Регистрируем скиллы из модуля skills (после VPN!)
     register_karina_base_skills(bot_client)
@@ -519,7 +526,7 @@ async def run_bot_main():
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")
     
-    # Устанавливаем команды ТОЛЬКО для вашего аккаунта (MY_ID)
+    # Устанавливаем команды бота (для всех пользователей)
     commands = [
         types.BotCommand("start", "Перезапустить 🔄"),
         types.BotCommand("app", "Панель управления 📱"),
@@ -549,14 +556,9 @@ async def run_bot_main():
         types.BotCommand("ttstest", "Тест голоса 🎤"),
     ]
     
-    # Команды только для владельца
+    # Устанавливаем команды для всех (BotCommandScopeUser нет в Telethon)
     await bot_client(functions.bots.SetBotCommandsRequest(
-        scope=types.BotCommandScopeUser(user_id=MY_ID), lang_code='ru', commands=commands
-    ))
-    
-    # Пустые команды для всех остальных (чтобы скрыть меню)
-    await bot_client(functions.bots.SetBotCommandsRequest(
-        scope=types.BotCommandScopeDefault(), lang_code='ru', commands=[]
+        scope=types.BotCommandScopeDefault(), lang_code='ru', commands=commands
     ))
     
     # Heartbeat таска для бота
