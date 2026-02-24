@@ -579,36 +579,6 @@ async def run_bot_main():
 
     # ========== НАСТРОЙКА ПРИВАТНОСТИ МЕНЮ ==========
     
-    # Список всех команд для владельца
-    commands = [
-        types.BotCommand("start", "Перезапустить 🔄"),
-        types.BotCommand("app", "Панель управления 📱"),
-        types.BotCommand("calendar", "Мои планы 📅"),
-        types.BotCommand("conflicts", "Конфликты ⚠️"),
-        types.BotCommand("health", "Здоровье ❤️"),
-        types.BotCommand("weather", "Погода 🌤"),
-        types.BotCommand("news", "Новости телематики 🗞"),
-        types.BotCommand("newsforce", "Обновить новости 🔄"),
-        types.BotCommand("newssources", "Источники новостей 📡"),
-        types.BotCommand("newsclear", "Очистить историю новостей 🧹"),
-        types.BotCommand("remember", "Запомнить факт ✍️"),
-        types.BotCommand("summary", "Еженедельный отчёт 📊"),
-        types.BotCommand("employees", "Сотрудники 👥"),
-        types.BotCommand("birthdays", "Дни рождения 🎂"),
-        types.BotCommand("habits", "Мои привычки 🎯"),
-        types.BotCommand("productivity", "Отчёт о продуктивности 📈"),
-        types.BotCommand("workstats", "Статистика работы ⏰"),
-        types.BotCommand("overwork", "Проверка переработок ⚠️"),
-        types.BotCommand("vision", "Компьютерное зрение 👁️"),
-        types.BotCommand("ocr", "Распознать текст на фото 📝"),
-        types.BotCommand("analyze", "Анализ изображения 🔍"),
-        types.BotCommand("doc", "Анализ документа 📄"),
-        types.BotCommand("receipt", "Анализ чека 🧾"),
-        types.BotCommand("tts", "Голосовые ответы 🎤"),
-        types.BotCommand("ttsvoice", "Выбрать голос 🎭"),
-        types.BotCommand("ttstest", "Тест голоса 🎤"),
-    ]
-    
     # 1. Стираем все команды для обычных пользователей (Default)
     await bot_client(functions.bots.SetBotCommandsRequest(
         scope=BotCommandScopeDefault(),
@@ -616,15 +586,18 @@ async def run_bot_main():
         commands=[]
     ))
     
-    # Убираем большую кнопку "Mini App" слева от поля ввода для всех
+    # Убираем большую кнопку меню слева от поля ввода для всех
     await bot_client(functions.bots.SetBotMenuButtonRequest(
         user_id=InputUserEmpty(),
         button=types.BotMenuButtonCommands()
     ))
 
-    # 2. Устанавливаем твои роскошные команды ТОЛЬКО для тебя (MY_ID)
+    # 2. Устанавливаем твои роскошные команды ТОЛЬКО для тебя
+    # ПРЕВРАЩАЕМ твой числовой MY_ID в правильный объект (TLObject), который ждет Telegram
+    my_peer = await bot_client.get_input_entity(MY_ID)
+
     await bot_client(functions.bots.SetBotCommandsRequest(
-        scope=BotCommandScopePeer(peer=MY_ID),
+        scope=BotCommandScopePeer(peer=my_peer),
         lang_code='ru',
         commands=commands
     ))
