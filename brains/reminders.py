@@ -309,13 +309,27 @@ class ReminderManager:
         return None
 
     def is_health_confirmation(self, text: str) -> bool:
-        """Проверяет подтверждение здоровья с использованием границ слов"""
-        text_lower = text.lower()
+        """
+        Проверяет подтверждение здоровья
+        Работает ТОЛЬКО для коротких сообщений (до 50 символов)
+        """
+        text_lower = text.lower().strip()
+        
+        # Если сообщение слишком длинное — это не подтверждение
+        if len(text_lower) > 50:
+            return False
+        
         import re
         # Ищем слова только целиком, чтобы не ловить 'да' в 'погода'
         confirm_patterns = [
-            r'\bсделал\b', r'\bготово\b', r'\bокей\b', r'\bуколол\b', 
-            r'\bподтверждаю\b', r'\bда\b', r'\bок\b', r'\byes\b', r'\bdone\b'
+            r'^\bсделал\b[.!]?$',      # "сделал!" или "сделал."
+            r'^\bготово\b[.!]?$',       # "готово!"
+            r'^\bуколол\b[.!]?$',       # "уколол!"
+            r'^\bподтверждаю\b[.!]?$',  # "подтверждаю!"
+            r'^\bok\b[.!]?$',           # "ok!"
+            r'^\bда\b[.!]?$',           # "да!"
+            r'^\byes\b[.!]?$',          # "yes!"
+            r'^\bdone\b[.!]?$',         # "done!"
         ]
         return any(re.search(pattern, text_lower) for pattern in confirm_patterns)
 
