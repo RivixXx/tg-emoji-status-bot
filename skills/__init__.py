@@ -1,6 +1,7 @@
 import logging
 import random
 import os
+import asyncio
 from telethon import events, types
 from brains.weather import get_weather
 from brains.ai import ask_karina
@@ -18,6 +19,45 @@ from auras import confirm_health
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+# ========== ЭФФЕКТ ПЕЧАТНОЙ МАШИНКИ (SMART TYPEWRITER) ==========
+
+async def send_with_typewriter(event, text):
+    """Эффект печатной машинки для Telegram. 
+    Безопасно для лимитов Telegram (обновляет сообщение не чаще 2 раз в секунду)."""
+    
+    # Если ответ короткий (меньше 50 символов), выводим сразу, без спецэффектов
+    if len(text) < 50:
+        await event.respond(text)
+        return
+
+    # Разбиваем текст на слова
+    words = text.split()
+    
+    # Вычисляем размер порции (примерно 4-5 "кадров" анимации на средний текст)
+    # Чтобы не получить бан от Telegram за слишком частые изменения (FloodWait)
+    frames = min(6, len(words) // 4) 
+    chunk_size = max(3, len(words) // frames)
+    
+    # 1. Отправляем начало текста с мигающим курсором ▒
+    current_text = " ".join(words[:chunk_size]) + " ▒"
+    msg = await event.respond(current_text)
+    
+    # 2. Постепенно дописываем текст
+    for i in range(chunk_size, len(words), chunk_size):
+        await asyncio.sleep(0.6)  # Идеальная задержка для Telegram
+        current_text = " ".join(words[:i + chunk_size]) + " ▒"
+        try:
+            await msg.edit(current_text)
+        except Exception:
+            pass # Игнорируем ошибки, если текст не изменился
+            
+    # 3. Финальный текст (убираем курсор)
+    await asyncio.sleep(0.4)
+    try:
+        await msg.edit(text)
+    except Exception:
+        pass
 
 def register_discovery_skills(client):
     @client.on(events.NewMessage(chats='me', pattern='(?i)id'))
@@ -1068,24 +1108,24 @@ def register_karina_base_skills(client):
                     async with client.action(event.chat_id, 'typing'):
                         # Анализируем фото
                         from brains.vision import analyze_image
-                        
+
                         # Определяем тип анализа по контексту
                         prompt = "Детально опиши что на этом изображении. Если есть текст — распиши его полностью."
-                        
+
                         result = await analyze_image(photo_path, prompt, user_id=event.chat_id)
-                        
+
                         if result.get("success"):
                             # Формируем ответ
                             response = f"🖼️ **Анализ изображения:**\n\n{result['description']}"
-                            
+
                             # Если есть текст — добавляем
                             if result.get("text_content"):
                                 response += "\n\n📝 **Распознанный текст:**\n_Карина может запомнить важную информацию из этого текста. Попроси меня!_"
-                            
-                            await event.respond(response, parse_mode='markdown')
+
+                            await send_with_typewriter(event, response)
                         else:
                             await event.respond(f"❌ Не удалось проанализировать фото: {result.get('error', 'Неизвестная ошибка')}")
-                
+
                 except Exception as e:
                     logger.error(f"Photo analysis error: {e}")
                     await event.respond("❌ Ошибка при анализе фото. Попробуй ещё раз!")
@@ -1178,45 +1218,14 @@ def register_karina_base_skills(client):
                 return
             
             event._responded = True
-            
+
+            # 1. Включаем статус "Карина печатает..." в шапке Telegram
             async with client.action(event.chat_id, 'typing'):
+                # 2. ИИ думает (пока он думает, висит статус "печатает")
                 response = await ask_karina(event.text, chat_id=event.chat_id)
                 logger.info(f"💬 Ответ: {response[:50] if response else 'None'}...")
 
-                # ========== TTS ИНТЕГРАЦИЯ ==========
-                # Проверяем настройки TTS
-                from brains.tts import get_tts_settings, text_to_speech
-
-                tts_settings = await get_tts_settings(event.chat_id)
-
-                # Отвечаем голосом ТОЛЬКО если:
-                # 1. TTS включён
-                # 2. Исходное сообщение было голосовым
-                # 3. TTS работает (временное отключение пока чиним)
-                use_tts = False  # TODO: Включить когда починим Silero v5
-                
-                if tts_settings.get("enabled", False) and is_voice_message and use_tts:
-                    # TTS включён — отправляем голосом
-                    try:
-                        voice = tts_settings.get("voice", "ksenia")
-                        logger.info(f"🎤 TTS: генерация голоса ({voice})...")
-
-                        audio_data = await text_to_speech(response, voice=voice)
-
-                        # Отправляем голосовое сообщение
-                        await client.send_voice(
-                            event.chat_id,
-                            audio_data,
-                            caption=response[:30] + "..." if len(response) > 30 else response
-                        )
-                        logger.info(f"✅ TTS: голосовое отправлено ({len(audio_data)} байт)")
-
-                    except Exception as e:
-                        logger.error(f"❌ TTS ошибка: {e}")
-                        # Fallback на текст если TTS не сработал
-                        await event.reply(response)
-                else:
-                    # TTS выключен или текст — отправляем текстом
-                    await event.reply(response)
+            # 3. Выводим текст с эффектом печатной машинки
+            await send_with_typewriter(event, response)
         else:
             logger.info(f"⚠️ Пропуск (не личный чат)")

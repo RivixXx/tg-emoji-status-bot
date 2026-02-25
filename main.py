@@ -44,6 +44,35 @@ from auras import state, start_auras
 from skills import register_karina_base_skills
 from plugins import plugin_manager
 
+# ========== FIRE-AND-FORGET (ДИСПЕТЧЕР ФОНОВЫХ ЗАДАЧ) ==========
+
+# Безопасное хранилище для фоновых задач (чтобы Python их не удалил до завершения)
+background_tasks = set()
+
+def fire_and_forget(coro):
+    """
+    Запускает асинхронную функцию в фоне. 
+    Бот не ждет её выполнения и мгновенно идет дальше.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return  # Если цикла нет, ничего не делаем
+
+    # Создаем задачу
+    task = loop.create_task(coro)
+    
+    # Сохраняем надежную ссылку
+    background_tasks.add(task)
+    
+    # Как только задача выполнится (успешно или с ошибкой) - удаляем её из памяти
+    task.add_done_callback(background_tasks.discard)
+    
+    # Если в фоне произойдет ошибка, выводим её в лог, чтобы бот не упал молча
+    task.add_done_callback(
+        lambda t: logging.error(f"⚠️ Ошибка в фоновой задаче: {t.exception()}") if t.exception() else None
+    )
+
 # ========== СТРУКТУРИРОВАННОЕ ЛОГИРОВАНИЕ ==========
 
 class JSONFormatter(logging.Formatter):
@@ -368,9 +397,34 @@ user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
 
 async def run_bot_main():
     """Основной цикл бота"""
+    
+    # ========== КЭШ ДЛЯ СКОРОСТИ (УРОВЕНЬ 1) ==========
+    USER_CACHE = {}
+    CACHE_TTL = 300 # Храним данные в памяти 5 минут (300 секунд)
+
+    async def get_user_fast(user_id):
+        """Мгновенно отдает юзера из памяти или запрашивает из БД"""
+        now = time.time()
+        # Если юзер есть в кэше и данные свежие — отдаем за миллисекунду
+        if user_id in USER_CACHE and (now - USER_CACHE[user_id]['time'] < CACHE_TTL):
+            return USER_CACHE[user_id]['data']
+        
+        # Если в кэше нет — идем в БД Supabase
+        user = await mcp_vpn_get_user(user_id)
+        if user:
+            USER_CACHE[user_id] = {'data': user, 'time': now}
+        return user
+
+    def update_user_cache(user_id, updates):
+        """Обновляет кэш локально, чтобы не ждать ответа базы"""
+        if user_id in USER_CACHE:
+            USER_CACHE[user_id]['data'].update(updates)
+            USER_CACHE[user_id]['time'] = time.time()
+    # ==================================================
+    
     # ========== VPN SHOP LOGIC (ДВОЙНОЕ ДНО + ВОРОНКА ПРОДАЖ) ==========
     # Регистрируем ПЕРЕД скиллами чтобы перехватывал сообщения от чужих ID
-    
+
     # Debug handler - логирует ВСЕ сообщения
     @bot_client.on(events.NewMessage())
     async def debug_all_messages(event):
@@ -398,7 +452,7 @@ async def run_bot_main():
         logger.info(f"🔍 VPN Interceptor CAUGHT: user_id={user_id} (MY_ID={MY_ID}), text='{text}'")
 
         # Получаем или создаём пользователя
-        user = await mcp_vpn_get_user(user_id)
+        user = await get_user_fast(user_id)
         if not user:
             # Проверяем есть ли реферер в /start
             referred_by = None
@@ -445,11 +499,14 @@ async def run_bot_main():
             if re.match(r"[^ @]+@[^ @]+\.[^ @]+", text):
                 # Генерируем код (4 цифры)
                 code = str(random.randint(1000, 9999))
+
+                # Мгновенно обновляем кэш
+                update_user_cache(user_id, {"state": "WAITING_CODE", "email": text, "verification_code": code})
                 
-                # Сохраняем в БД
-                await mcp_vpn_update_user_state(user_id, "WAITING_CODE", email=text, code=code)
-                
-                # В будущем здесь будет реальная отправка email. 
+                # Сохраняем в БД в фоне (Fire-and-Forget)
+                fire_and_forget(mcp_vpn_update_user_state(user_id, "WAITING_CODE", email=text, code=code))
+
+                # В будущем здесь будет реальная отправка email.
                 # Пока для теста выводим код прямо в чат!
                 await event.respond(
                     f"✅ **Код отправлен на вашу почту: {text}**\n\n"
@@ -463,16 +520,21 @@ async def run_bot_main():
         # ШАГ 3: Обработка ввода Кода
         elif state == "WAITING_CODE":
             if text == user["verification_code"]:
-                await mcp_vpn_update_user_state(user_id, "REGISTERED")
+                # Мгновенно обновляем кэш
+                update_user_cache(user_id, {"state": "REGISTERED"})
+                
+                # Сохраняем в БД в фоне (Fire-and-Forget)
+                fire_and_forget(mcp_vpn_update_user_state(user_id, "REGISTERED"))
+                
                 await event.respond(
                     "🎉 **[ ДОСТУП РАЗРЕШЕН ]**\n\nАккаунт успешно создан! Можете пользоваться терминалом.",
                     buttons=get_main_menu()
                 )
-                
-                # Если есть реферер — начисляем комиссию
+
+                # Если есть реферер — начисляем комиссию в фоне
                 if user.get("referred_by"):
                     referrer_id = user["referred_by"]
-                    await mcp_vpn_add_referral(referrer_id, user_id, commission=0)
+                    fire_and_forget(mcp_vpn_add_referral(referrer_id, user_id, commission=0))
                     logger.info(f"✅ Referral registered: {referrer_id} -> {user_id}")
             else:
                 await event.respond("❌ Неверный код. Попробуйте еще раз:")
@@ -581,24 +643,34 @@ async def run_bot_main():
         """Обработка нажатий на inline-кнопки (под сообщениями)"""
         user_id = event.sender_id
         data = event.data.decode('utf-8')
-        
-        # Получаем пользователя из БД
-        user = await mcp_vpn_get_user(user_id)
+
+        # Получаем пользователя из кэша или БД
+        user = await get_user_fast(user_id)
         if not user:
             # Если пользователя нет в базе — создаём
             await mcp_vpn_create_user(user_id)
-            user = await mcp_vpn_get_user(user_id)
+            user = await get_user_fast(user_id)
             if not user:
                 await event.answer("⚠️ Ошибка. Попробуйте /start", alert=True)
                 return
 
         if data == "accept_offer":
-            await mcp_vpn_update_user_state(user_id, "WAITING_EMAIL")
-            await event.edit("📧 **Для регистрации в системе необходим Email.**\n\nПожалуйста, введите вашу почту отправьте сообщением:")
+            # Мгновенно обновляем память
+            update_user_cache(user_id, {"state": "WAITING_EMAIL"}) 
             
+            # Кидаем сохранение в облако в фон (Без await!)
+            fire_and_forget(mcp_vpn_update_user_state(user_id, "WAITING_EMAIL"))
+            
+            # И в ту же миллисекунду отдаем текст юзеру!
+            await event.edit("📧 **Для регистрации в системе необходим Email.**\n\nПожалуйста, введите вашу почту отправьте сообщением:")
+
         elif data == "decline_offer":
+            # Обновляем кэш локально
+            update_user_cache(user_id, {"state": "NEW"})
+            # Сохраняем в БД в фоне
+            fire_and_forget(mcp_vpn_update_user_state(user_id, "NEW"))
+            
             await event.edit("❌ Регистрация отменена. Чтобы начать заново, отправьте любое сообщение.")
-            await mcp_vpn_update_user_state(user_id, "NEW")
             
         elif data.startswith("pay_"):
             months = data.split("_")[1]
@@ -629,10 +701,8 @@ async def run_bot_main():
                     "Генерация криптографического ключа..."
                 )
 
-                # Создаём заказ в БД
-                order = await mcp_vpn_create_order(sender_id, months, amount)
-                if order:
-                    logger.info(f"✅ Order created: {order['id']} for user {sender_id}")
+                # Создаём заказ в БД (в фоне, чтобы не ждать)
+                fire_and_forget(mcp_vpn_create_order(sender_id, months, amount))
 
                 # Генерируем ключ через Marzban
                 from brains.vpn_api import check_payment_and_issue_key
@@ -644,23 +714,13 @@ async def run_bot_main():
                     vless_key = result.get("vless_key")
                     expire_days = result.get("expire_days", 30)
 
-                    # Обновляем заказ
-                    if order:
-                        await mcp_vpn_update_order(order['id'], "completed", vless_key=vless_key)
-
-                    # Начисляем комиссию рефереру (10%)
-                    user = await mcp_vpn_get_user(sender_id)
+                    # Начисляем комиссию рефереру (10%) в фоне
+                    user = await get_user_fast(sender_id)
                     if user and user.get("referred_by"):
                         referrer_id = user["referred_by"]
                         commission = calculate_referral_commission(amount)
-                        
-                        # Обновляем баланс реферера
-                        referrer = await mcp_vpn_get_user(referrer_id)
-                        if referrer:
-                            new_balance = float(referrer.get("balance", 0)) + commission
-                            await mcp_vpn_update_balance(referrer_id, new_balance)
-                            await mcp_vpn_add_referral(referrer_id, sender_id, commission=commission)
-                            logger.info(f"💰 Commission {commission}₽ accrued to {referrer_id}")
+                        fire_and_forget(mcp_vpn_add_referral(referrer_id, sender_id, commission=commission))
+                        logger.info(f"💰 Commission {commission}₽ accrued to {referrer_id}")
 
                     # Генерируем QR-код в памяти
                     qr = qrcode.QRCode(
