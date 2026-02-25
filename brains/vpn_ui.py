@@ -713,6 +713,17 @@ def get_instructions_keyboard() -> list:
     ]
 
 
+def get_platform_keyboard() -> list:
+    """Клавиатура выбора платформы"""
+    return [
+        [Button.inline("🤖 Android", b"instr_android")],
+        [Button.inline("📱 iOS", b"instr_ios")],
+        [Button.inline("💻 Windows", b"instr_windows")],
+        [Button.inline("🍎 macOS", b"instr_macos")],
+        [Button.inline("◀️ Назад", b"menu_back")],
+    ]
+
+
 def get_payment_keyboard(months: int) -> list:
     """Клавиатура оплаты"""
     return [
