@@ -386,14 +386,17 @@ async def run_bot_main():
     async def vpn_stranger_interceptor(event):
         """Перехватывает текстовые сообщения от чужих ID и ведет по воронке"""
         user_id = event.sender_id
-        text = event.text.strip()
+        text = event.text.strip() if event.text else ""
+        
+        # Логирование для отладки
+        logger.info(f"🔍 VPN Interceptor: user_id={user_id}, text='{text}', state=checking")
 
         # Получаем или создаём пользователя
         user = await mcp_vpn_get_user(user_id)
         if not user:
             # Проверяем есть ли реферер в /start
             referred_by = None
-            if event.text.startswith('/start') and len(event.text.split()) > 1:
+            if event.text and event.text.startswith('/start') and len(event.text.split()) > 1:
                 try:
                     referred_by = int(event.text.split()[1])
                 except (ValueError, IndexError):
@@ -404,8 +407,9 @@ async def run_bot_main():
                 logger.error(f"❌ Failed to create VPN user {user_id}")
                 await event.respond("⚠️ Ошибка при регистрации. Попробуйте позже.")
                 raise events.StopPropagation
-
+        
         state = user["state"]
+        logger.info(f"✅ User {user_id} state: {state}")
 
         # ШАГ 1: Приветствие и Оферта (реагируем на /start или любое первое слово)
         if state == "NEW":
