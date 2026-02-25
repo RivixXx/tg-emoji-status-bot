@@ -54,7 +54,29 @@ from brains.vpn_ui import (
     get_referral_keyboard,
     get_support_text,
     get_support_keyboard,
-    get_faq_text,
+    get_support_write_keyboard,
+    get_faq_main_text,
+    get_faq_main_keyboard,
+    get_faq_what_text,
+    get_faq_what_keyboard,
+    get_faq_connect_text,
+    get_faq_connect_keyboard,
+    get_faq_devices_text,
+    get_faq_devices_keyboard,
+    get_faq_russia_text,
+    get_faq_russia_keyboard,
+    get_faq_speed_text,
+    get_faq_speed_keyboard,
+    get_faq_security_text,
+    get_faq_security_keyboard,
+    get_faq_tips_main_text,
+    get_faq_tips_keyboard,
+    get_faq_anon_text,
+    get_faq_anon_keyboard,
+    get_faq_leak_text,
+    get_faq_leak_keyboard,
+    get_faq_metadata_text,
+    get_faq_metadata_keyboard,
     get_download_text,
     get_download_keyboard,
     get_balance_text,
@@ -857,11 +879,48 @@ async def run_bot_main():
             referral_link = f"https://t.me/your_bot?start={user_id}"
             await event.answer(f"📋 Ссылка скопирована:\n{referral_link}", alert=True)
 
+        # ========== FAQ ==========
+        
+        elif data == "menu_faq":
+            await event.edit(get_faq_main_text(), buttons=get_faq_main_keyboard())
+
+        elif data == "faq_what":
+            await event.edit(get_faq_what_text(), buttons=get_faq_what_keyboard())
+
+        elif data == "faq_connect":
+            await event.edit(get_faq_connect_text(), buttons=get_faq_connect_keyboard())
+
+        elif data == "faq_devices":
+            await event.edit(get_faq_devices_text(), buttons=get_faq_devices_keyboard())
+
+        elif data == "faq_russia":
+            await event.edit(get_faq_russia_text(), buttons=get_faq_russia_keyboard())
+
+        elif data == "faq_speed":
+            await event.edit(get_faq_speed_text(), buttons=get_faq_speed_keyboard())
+
+        elif data == "faq_security":
+            await event.edit(get_faq_security_text(), buttons=get_faq_security_keyboard())
+
+        elif data == "faq_tips":
+            await event.edit(get_faq_tips_main_text(), buttons=get_faq_tips_keyboard())
+
+        elif data == "faq_anon":
+            await event.edit(get_faq_anon_text(), buttons=get_faq_anon_keyboard())
+
+        elif data == "faq_leak":
+            await event.edit(get_faq_leak_text(), buttons=get_faq_leak_keyboard())
+
+        elif data == "faq_metadata":
+            await event.edit(get_faq_metadata_text(), buttons=get_faq_metadata_keyboard())
+
+        # ========== ПОДДЕРЖКА ==========
+        
         elif data == "menu_support":
             await event.edit(get_support_text(), buttons=get_support_keyboard())
 
-        elif data == "menu_faq":
-            await event.edit(get_faq_text(), buttons=get_back_keyboard(main=True))
+        elif data == "support_write":
+            await event.edit(get_support_write_text(), buttons=get_support_write_keyboard())
 
         else:
             await event.answer("👌 Ок!", alert=False)
