@@ -594,7 +594,8 @@ async def run_bot_main():
         elif state == "REGISTERED":
             # Отправляем с баннером
             try:
-                await event.respond(
+                await bot_client.send_file(
+                    event.chat_id,
                     file="banners/menu.jpg",
                     caption=get_main_menu_text(user),
                     buttons=get_main_menu_keyboard()
@@ -830,7 +831,11 @@ async def run_bot_main():
         # ========== НОВОЕ INLINE-МЕНЮ ==========
         
         elif data == "menu_main" or data == "menu_back":
-            # Отправляем с баннером
+            # Отправляем с баннером (новое сообщение вместо edit)
+            try:
+                await event.delete()
+            except Exception:
+                pass
             try:
                 await bot_client.send_file(
                     event.chat_id,
@@ -855,7 +860,11 @@ async def run_bot_main():
             await event.edit(get_download_text(), buttons=get_download_keyboard())
 
         elif data == "menu_instructions":
-            # Отправляем с баннером
+            # Отправляем с баннером (новое сообщение вместо edit)
+            try:
+                await event.delete()
+            except Exception:
+                pass
             try:
                 await bot_client.send_file(
                     event.chat_id,
@@ -940,7 +949,11 @@ async def run_bot_main():
         # ========== ПОДДЕРЖКА ==========
         
         elif data == "menu_support":
-            # Отправляем с баннером
+            # Отправляем с баннером (новое сообщение вместо edit)
+            try:
+                await event.delete()
+            except Exception:
+                pass
             try:
                 await bot_client.send_file(
                     event.chat_id,
