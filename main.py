@@ -592,11 +592,19 @@ async def run_bot_main():
 
         # ШАГ 4: Главное меню (Пользователь зарегистрирован)
         elif state == "REGISTERED":
-            # Отправляем красивое inline-меню
-            await event.respond(
-                get_main_menu_text(user),
-                buttons=get_main_menu_keyboard()
-            )
+            # Отправляем с баннером
+            try:
+                await event.respond(
+                    file="banners/menu.jpg",
+                    caption=get_main_menu_text(user),
+                    buttons=get_main_menu_keyboard()
+                )
+            except Exception as e:
+                logger.warning(f"Не удалось отправить баннер меню: {e}")
+                await event.respond(
+                    get_main_menu_text(user),
+                    buttons=get_main_menu_keyboard()
+                )
             raise events.StopPropagation
 
 
@@ -822,7 +830,17 @@ async def run_bot_main():
         # ========== НОВОЕ INLINE-МЕНЮ ==========
         
         elif data == "menu_main" or data == "menu_back":
-            await event.edit(get_main_menu_text(user), buttons=get_main_menu_keyboard())
+            # Отправляем с баннером
+            try:
+                await bot_client.send_file(
+                    event.chat_id,
+                    file="banners/menu.jpg",
+                    caption=get_main_menu_text(user),
+                    buttons=get_main_menu_keyboard()
+                )
+            except Exception as e:
+                logger.warning(f"Не удалось отправить баннер меню: {e}")
+                await event.edit(get_main_menu_text(user), buttons=get_main_menu_keyboard())
 
         elif data == "menu_profile":
             await event.edit(get_profile_text(user), buttons=get_back_keyboard(main=True))
@@ -837,7 +855,17 @@ async def run_bot_main():
             await event.edit(get_download_text(), buttons=get_download_keyboard())
 
         elif data == "menu_instructions":
-            await event.edit(get_instructions_text(), buttons=get_platform_keyboard())
+            # Отправляем с баннером
+            try:
+                await bot_client.send_file(
+                    event.chat_id,
+                    file="banners/instructions.jpg",
+                    caption=get_instructions_text(),
+                    buttons=get_platform_keyboard()
+                )
+            except Exception as e:
+                logger.warning(f"Не удалось отправить баннер инструкций: {e}")
+                await event.edit(get_instructions_text(), buttons=get_platform_keyboard())
 
         elif data == "instr_android":
             await event.edit(get_instruction_platform_text("android"), buttons=[
@@ -912,7 +940,17 @@ async def run_bot_main():
         # ========== ПОДДЕРЖКА ==========
         
         elif data == "menu_support":
-            await event.edit(get_support_text(), buttons=get_support_keyboard())
+            # Отправляем с баннером
+            try:
+                await bot_client.send_file(
+                    event.chat_id,
+                    file="banners/support.jpg",
+                    caption=get_support_text(),
+                    buttons=get_support_keyboard()
+                )
+            except Exception as e:
+                logger.warning(f"Не удалось отправить баннер поддержки: {e}")
+                await event.edit(get_support_text(), buttons=get_support_keyboard())
 
         elif data == "support_write":
             await event.edit(get_support_write_text(), buttons=get_support_write_keyboard())
