@@ -92,7 +92,7 @@ class TestInMemoryCache:
         USER_CACHE, get_user_fast, update_user_cache, CACHE_TTL = cache_setup
         
         # Устанавливаем короткий TTL для теста
-        CACHE_TTL = 1  # 1 секунда
+        CACHE_TTL = 0.1  # 100мс для быстрого теста
         
         mock_user = {"id": 123, "state": "NEW"}
         mock_func = AsyncMock(return_value=mock_user)
@@ -100,8 +100,13 @@ class TestInMemoryCache:
         # Заполняем кэш
         await get_user_fast(123, mock_func)
         
+        # Сразу после заполнения кэш должен работать
+        mock_func.reset_mock()
+        user = await get_user_fast(123, mock_func)
+        assert not mock_func.called  # Из кэша
+        
         # Ждём истечения TTL
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.15)
         
         # Снова запрашиваем (должен быть промах)
         mock_func.reset_mock()
@@ -191,12 +196,16 @@ class TestFireAndForget:
         fire_and_forget, background_tasks = fire_forget_setup
         
         async def dummy_coro():
+            await asyncio.sleep(0.5)  # Держим задачу живой
             return "done"
         
-        fire_and_forget(dummy_coro())
+        # Запускаем в event loop
+        async def run_test():
+            fire_and_forget(dummy_coro())
+            await asyncio.sleep(0.1)  # Даём задаче добавиться в set
+            assert len(background_tasks) > 0
         
-        # Задача должна быть добавлена
-        assert len(background_tasks) > 0
+        asyncio.run(run_test())
 
     @pytest.mark.asyncio
     async def test_fire_and_forget_completion(self, fire_forget_setup):
