@@ -69,9 +69,16 @@ def fire_and_forget(coro):
     task.add_done_callback(background_tasks.discard)
     
     # Если в фоне произойдет ошибка, выводим её в лог, чтобы бот не упал молча
-    task.add_done_callback(
-        lambda t: logging.error(f"⚠️ Ошибка в фоновой задаче: {t.exception()}") if t.exception() else None
-    )
+    def log_error(t):
+        if t.exception():
+            err_msg = str(t.exception())
+            # Игнорируем временные ошибки блокировки БД
+            if "database is locked" in err_msg:
+                logging.warning(f"⚠️ БД заблокирована (retry через 2с): {err_msg}")
+            else:
+                logging.error(f"⚠️ Ошибка в фоновой задаче: {err_msg}")
+    
+    task.add_done_callback(log_error)
 
 # ========== СТРУКТУРИРОВАННОЕ ЛОГИРОВАНИЕ ==========
 
@@ -1098,6 +1105,11 @@ async def amain():
 
     try:
         await run_web()
+    except OSError as e:
+        if "Address already in use" in str(e):
+            logger.error("🔴 Порт 8080 занят! Завершение...")
+        else:
+            raise
     finally:
         logger.info("🔌 Завершение работы...")
         SHUTDOWN_EVENT.set()
@@ -1109,8 +1121,18 @@ async def amain():
         sh_task.cancel()
         await asyncio.gather(bot_supervisor, user_supervisor, sh_task, return_exceptions=True)
 
-        if bot_client.is_connected(): await bot_client.disconnect()
-        if user_client.is_connected(): await user_client.disconnect()
+        # Безопасное отключение с обработкой блокировки БД
+        if bot_client.is_connected():
+            try:
+                await bot_client.disconnect()
+            except Exception as e:
+                logger.warning(f"⚠️ Ошибка при отключении бота: {e}")
+        
+        if user_client.is_connected():
+            try:
+                await user_client.disconnect()
+            except Exception as e:
+                logger.warning(f"⚠️ Ошибка при отключении юзербота: {e}")
 
         logger.info("👋 Karina AI остановлена.")
 
