@@ -371,6 +371,12 @@ async def run_bot_main():
     # ========== VPN SHOP LOGIC (ДВОЙНОЕ ДНО + ВОРОНКА ПРОДАЖ) ==========
     # Регистрируем ПЕРЕД скиллами чтобы перехватывал сообщения от чужих ID
     
+    # Debug handler - логирует ВСЕ сообщения
+    @bot_client.on(events.NewMessage())
+    async def debug_all_messages(event):
+        """Логирует все сообщения для отладки"""
+        logger.info(f"📩 DEBUG: message from {event.sender_id} (MY_ID={MY_ID}), text='{event.text}'")
+    
     # Используем Supabase через MCP вместо временного словаря
     # Состояния: NEW, WAITING_EMAIL, WAITING_CODE, REGISTERED
 
@@ -389,7 +395,7 @@ async def run_bot_main():
         text = event.text.strip() if event.text else ""
         
         # Логирование для отладки
-        logger.info(f"🔍 VPN Interceptor: user_id={user_id}, text='{text}', state=checking")
+        logger.info(f"🔍 VPN Interceptor CAUGHT: user_id={user_id} (MY_ID={MY_ID}), text='{text}'")
 
         # Получаем или создаём пользователя
         user = await mcp_vpn_get_user(user_id)
