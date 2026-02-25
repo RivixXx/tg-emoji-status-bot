@@ -44,7 +44,6 @@ from brains.vpn_ui import (
     get_main_menu_text,
     get_main_menu_keyboard,
     get_profile_text,
-    get_key_text,
     get_tariffs_text,
     get_tariffs_keyboard,
     get_instructions_text,
@@ -827,10 +826,6 @@ async def run_bot_main():
 
         elif data == "menu_profile":
             await event.edit(get_profile_text(user), buttons=get_back_keyboard(main=True))
-
-        elif data == "menu_key":
-            vless_key = user.get("vless_key")
-            await event.edit(get_key_text(vless_key), buttons=get_back_keyboard(main=True))
 
         elif data == "menu_tariffs":
             await event.edit(get_tariffs_text(), buttons=get_tariffs_keyboard())
