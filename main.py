@@ -92,6 +92,39 @@ from plugins import plugin_manager
 # Безопасное хранилище для фоновых задач (чтобы Python их не удалил до завершения)
 background_tasks = set()
 
+# Кэш file_id для баннеров (мгновенная отправка после первого раза)
+BANNER_CACHE = {}
+
+async def send_banner(client, chat_id, banner_name, caption, buttons):
+    """Отправляет баннер с кэшированием file_id"""
+    # Если file_id уже в кэше — отправляем мгновенно
+    if banner_name in BANNER_CACHE:
+        try:
+            await client.send_file(
+                chat_id,
+                file=BANNER_CACHE[banner_name],
+                caption=caption,
+                buttons=buttons
+            )
+            return
+        except Exception:
+            # Если кэш не сработал — удаляем и пробуем загрузить заново
+            del BANNER_CACHE[banner_name]
+    
+    # Первый раз — загружаем файл
+    try:
+        msg = await client.send_file(
+            chat_id,
+            file=f"banners/{banner_name}",
+            caption=caption,
+            buttons=buttons
+        )
+        # Сохраняем file_id в кэш
+        if msg and msg.media:
+            BANNER_CACHE[banner_name] = msg.media.document
+    except Exception as e:
+        raise e
+
 def fire_and_forget(coro):
     """
     Запускает асинхронную функцию в фоне. 
@@ -592,14 +625,9 @@ async def run_bot_main():
 
         # ШАГ 4: Главное меню (Пользователь зарегистрирован)
         elif state == "REGISTERED":
-            # Отправляем с баннером
+            # Отправляем с баннером (с кэшем)
             try:
-                await bot_client.send_file(
-                    event.chat_id,
-                    file="banners/menu.jpg",
-                    caption=get_main_menu_text(user),
-                    buttons=get_main_menu_keyboard()
-                )
+                await send_banner(bot_client, event.chat_id, "menu.jpg", get_main_menu_text(user), get_main_menu_keyboard())
             except Exception as e:
                 logger.warning(f"Не удалось отправить баннер меню: {e}")
                 await event.respond(
@@ -831,18 +859,13 @@ async def run_bot_main():
         # ========== НОВОЕ INLINE-МЕНЮ ==========
         
         elif data == "menu_main" or data == "menu_back":
-            # Отправляем с баннером (новое сообщение вместо edit)
+            # Отправляем с баннером (с кэшем)
             try:
                 await event.delete()
             except Exception:
                 pass
             try:
-                await bot_client.send_file(
-                    event.chat_id,
-                    file="banners/menu.jpg",
-                    caption=get_main_menu_text(user),
-                    buttons=get_main_menu_keyboard()
-                )
+                await send_banner(bot_client, event.chat_id, "menu.jpg", get_main_menu_text(user), get_main_menu_keyboard())
             except Exception as e:
                 logger.warning(f"Не удалось отправить баннер меню: {e}")
                 await event.edit(get_main_menu_text(user), buttons=get_main_menu_keyboard())
@@ -860,18 +883,13 @@ async def run_bot_main():
             await event.edit(get_download_text(), buttons=get_download_keyboard())
 
         elif data == "menu_instructions":
-            # Отправляем с баннером (новое сообщение вместо edit)
+            # Отправляем с баннером (с кэшем)
             try:
                 await event.delete()
             except Exception:
                 pass
             try:
-                await bot_client.send_file(
-                    event.chat_id,
-                    file="banners/instructions.jpg",
-                    caption=get_instructions_text(),
-                    buttons=get_platform_keyboard()
-                )
+                await send_banner(bot_client, event.chat_id, "instructions.jpg", get_instructions_text(), get_platform_keyboard())
             except Exception as e:
                 logger.warning(f"Не удалось отправить баннер инструкций: {e}")
                 await event.edit(get_instructions_text(), buttons=get_platform_keyboard())
@@ -949,18 +967,13 @@ async def run_bot_main():
         # ========== ПОДДЕРЖКА ==========
         
         elif data == "menu_support":
-            # Отправляем с баннером (новое сообщение вместо edit)
+            # Отправляем с баннером (с кэшем)
             try:
                 await event.delete()
             except Exception:
                 pass
             try:
-                await bot_client.send_file(
-                    event.chat_id,
-                    file="banners/support.jpg",
-                    caption=get_support_text(),
-                    buttons=get_support_keyboard()
-                )
+                await send_banner(bot_client, event.chat_id, "support.jpg", get_support_text(), get_support_keyboard())
             except Exception as e:
                 logger.warning(f"Не удалось отправить баннер поддержки: {e}")
                 await event.edit(get_support_text(), buttons=get_support_keyboard())
