@@ -40,6 +40,28 @@ from brains.mcp_vpn_shop import (
     mcp_vpn_update_balance,
     calculate_referral_commission
 )
+from brains.vpn_ui import (
+    get_main_menu_text,
+    get_main_menu_keyboard,
+    get_profile_text,
+    get_key_text,
+    get_tariffs_text,
+    get_tariffs_keyboard,
+    get_instructions_text,
+    get_instruction_platform_text,
+    get_platform_keyboard,
+    get_referral_text,
+    get_referral_keyboard,
+    get_support_text,
+    get_support_keyboard,
+    get_faq_text,
+    get_download_text,
+    get_download_keyboard,
+    get_balance_text,
+    get_balance_keyboard,
+    get_payment_keyboard,
+    get_back_keyboard,
+)
 from auras import state, start_auras
 from skills import register_karina_base_skills
 from plugins import plugin_manager
@@ -549,99 +571,11 @@ async def run_bot_main():
 
         # ШАГ 4: Главное меню (Пользователь зарегистрирован)
         elif state == "REGISTERED":
-            if text == "👤 Профиль":
-                email = user.get("email", "Не указан")
-                balance = user.get("balance", 0)
-                
-                profile_text = (
-                    f"**Ваш профиль:**\n\n"
-                    f"📧 Email: `{email}`\n"
-                    f"🆔 ID: `{user_id}`\n"
-                    f"💳 Баланс: {balance} ₽\n\n"
-                    f"Для управления подписками используйте меню."
-                )
-                await event.respond(profile_text)
-                
-            elif text == "🛒 Тарифы (Магазин)":
-                keyboard = [
-                    [Button.inline("💳 1 Месяц — 150 ₽", b"pay_1")],
-                    [Button.inline("💳 3 Месяца — 400 ₽", b"pay_3")],
-                ]
-                await event.respond(
-                    "📂 **[ УРОВНИ ДОСТУПА ]**\n\n"
-                    "Выберите период активации ключа:\n\n"
-                    "• 1 месяц — 150 ₽\n"
-                    "• 3 месяца — 400 ₽ (выгода 50 ₽)\n\n"
-                    "После оплаты вы получите VLESS ключ и QR-код для подключения.",
-                    buttons=keyboard
-                )
-                
-            elif text == "📖 Инструкция (FAQ)":
-                faq_text = (
-                    "📖 **ИНСТРУКЦИЯ ПО ПОДКЛЮЧЕНИЮ**\n\n"
-                    "**Шаг 1: Скачайте приложение**\n"
-                    "• iOS: Hiddify или V2Box\n"
-                    "• Android: Hiddify или v2rayNG\n"
-                    "• Windows/Mac: Hiddify или Nekoray\n\n"
-                    "**Шаг 2: Добавьте ключ**\n"
-                    "1. Купите подписку в разделе '🛒 Тарифы'\n"
-                    "2. Скопируйте полученный VLESS ключ\n"
-                    "3. В приложении нажмите 'Добавить из буфера'\n\n"
-                    "**Шаг 3: Подключитесь**\n"
-                    "Нажмите кнопку подключения в приложении."
-                )
-                await event.respond(faq_text)
-                
-            elif text == "💳 Баланс":
-                balance = user.get("balance", 0)
-                refill_keyboard = [
-                    [Button.inline("💰 Пополнить (СБП)", b"refill_sbp")],
-                    [Button.inline("💰 Пополнить (Crypto)", b"refill_crypto")],
-                ]
-                await event.respond(
-                    f"**Ваш баланс:** {balance} ₽\n\n"
-                    f"Реферальные отчисления автоматически зачисляются на этот счёт.\n"
-                    f"Для оплаты подписки с баланса обратитесь в поддержку.",
-                    buttons=refill_keyboard
-                )
-                
-            elif text == "👥 Рефералы":
-                stats = await mcp_vpn_get_referral_stats(user_id)
-                total_referrals = stats.get("total_referrals", 0)
-                total_commission = stats.get("total_commission", 0)
-                balance = user.get("balance", 0)
-                referral_link = f"https://t.me/your_bot?start={user_id}"
-                
-                referral_text = (
-                    f"👥 **РЕФЕРАЛЬНАЯ СИСТЕМА**\n\n"
-                    f"Пригласи друзей и получи 10% от их покупок!\n\n"
-                    f"📊 **Твоя статистика:**\n"
-                    f"• Рефералов: {total_referrals}\n"
-                    f"• Заработано: {total_commission} ₽\n"
-                    f"• На балансе: {balance} ₽\n\n"
-                    f"🔗 **Твоя ссылка:**\n"
-                    f"`{referral_link}`"
-                )
-                await event.respond(referral_text)
-                
-            elif text == "🆘 Поддержка":
-                support_text = (
-                    "🆘 **ПОДДЕРЖКА**\n\n"
-                    "По всем вопросам обращайтесь:\n\n"
-                    "• Telegram: @support\n"
-                    "⏰ Время работы поддержки: 9:00 - 21:00 МСК"
-                )
-                await event.respond(support_text)
-            
-            # --- ВОТ ЭТОТ БЛОК РЕШАЕТ ПРОБЛЕМУ ---
-            elif text == "/start":
-                # Если уже зарегистрированный клиент зачем-то жмет /start, просто даем ему меню
-                await event.respond("Главное меню терминала:", buttons=get_main_menu())
-            else:
-                # Если он пишет любой другой текст (пытается общаться с ботом)
-                await event.respond("Для управления VPN-сервисом используйте кнопки меню ниже👇", buttons=get_main_menu())
-            
-            # ЖЕЛЕЗНОЕ ПРАВИЛО: Блокируем ЛЮБЫЕ сообщения чужаков, чтобы они не прошли дальше!
+            # Отправляем красивое inline-меню
+            await event.respond(
+                get_main_menu_text(user),
+                buttons=get_main_menu_keyboard()
+            )
             raise events.StopPropagation
 
 
@@ -862,7 +796,75 @@ async def run_bot_main():
             )
             
         elif data == "refill_confirm":
-            await event.edit("⏳ **ПРОВЕРКА ПЛАТЕЖА**\n\nВаш запрос отправлен на проверку. После подтверждения баланса вы получите уведомление.")
+            await event.edit("⏳ **ПРОВЕРКА ПЛАТЕЖА**\n\nВаш запрос отправлен на проверку.")
+
+        # ========== НОВОЕ INLINE-МЕНЮ ==========
+        
+        elif data == "menu_main" or data == "menu_back":
+            await event.edit(get_main_menu_text(user), buttons=get_main_menu_keyboard())
+
+        elif data == "menu_profile":
+            await event.edit(get_profile_text(user), buttons=get_back_keyboard(main=True))
+
+        elif data == "menu_key":
+            vless_key = user.get("vless_key")
+            await event.edit(get_key_text(vless_key), buttons=get_back_keyboard(main=True))
+
+        elif data == "menu_tariffs":
+            await event.edit(get_tariffs_text(), buttons=get_tariffs_keyboard())
+
+        elif data == "menu_balance":
+            await event.edit(get_balance_text(user), buttons=get_balance_keyboard())
+
+        elif data == "menu_download":
+            await event.edit(get_download_text(), buttons=get_download_keyboard())
+
+        elif data == "menu_instructions":
+            await event.edit(get_instructions_text(), buttons=get_platform_keyboard())
+
+        elif data == "instr_android":
+            await event.edit(get_instruction_platform_text("android"), buttons=[
+                [Button.inline("📥 Скачать", url="https://play.google.com/store/apps/details?id=app.hiddify.com")],
+                [Button.inline("◀️ Назад", b"menu_instructions")],
+                [Button.inline("🏠 Главное меню", b"menu_main")],
+            ])
+
+        elif data == "instr_ios":
+            await event.edit(get_instruction_platform_text("ios"), buttons=[
+                [Button.inline("📥 Скачать", url="https://apps.apple.com/app/hiddify-proxy/id6505229441")],
+                [Button.inline("◀️ Назад", b"menu_instructions")],
+                [Button.inline("🏠 Главное меню", b"menu_main")],
+            ])
+
+        elif data == "instr_windows":
+            await event.edit(get_instruction_platform_text("windows"), buttons=[
+                [Button.inline("📥 Скачать", url="https://github.com/hiddify/hiddify-next/releases")],
+                [Button.inline("◀️ Назад", b"menu_instructions")],
+                [Button.inline("🏠 Главное меню", b"menu_main")],
+            ])
+
+        elif data == "instr_macos":
+            await event.edit(get_instruction_platform_text("macos"), buttons=[
+                [Button.inline("◀️ Назад", b"menu_instructions")],
+                [Button.inline("🏠 Главное меню", b"menu_main")],
+            ])
+
+        elif data == "menu_referral":
+            stats = await mcp_vpn_get_referral_stats(user_id)
+            await event.edit(get_referral_text(user, stats), buttons=get_referral_keyboard())
+
+        elif data == "ref_copy":
+            referral_link = f"https://t.me/your_bot?start={user_id}"
+            await event.answer(f"📋 Ссылка скопирована:\n{referral_link}", alert=True)
+
+        elif data == "menu_support":
+            await event.edit(get_support_text(), buttons=get_support_keyboard())
+
+        elif data == "menu_faq":
+            await event.edit(get_faq_text(), buttons=get_back_keyboard(main=True))
+
+        else:
+            await event.answer("👌 Ок!", alert=False)
     # ==================================================
 
     # Запускаем бота
