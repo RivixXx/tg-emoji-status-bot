@@ -173,7 +173,7 @@ def get_faq_main_text() -> str:
 """
 
 
-def get_faq_what_is_text() -> str:
+def get_faq_what_text() -> str:
     """Что такое Karina VPN"""
     return f"""
 {BANNERS["FAQ_WHAT"]}
