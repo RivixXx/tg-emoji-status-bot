@@ -134,23 +134,45 @@ class TaskPlanner:
 Доступные инструменты:
 - write_file, read_file, run_command, api_call, database_query
 
-Формат ответа (JSON):
-{{
-  "steps": [
-    {{
-      "id": 1,
-      "description": "Описание шага",
-      "tool": "название инструмента",
-      "parameters": {{"param": "value"}},
-      "expected_result": "Ожидаемый результат"
-    }}
-  ]
-}}
+Ответь ТОЛЬКО JSON массивом шагов в формате:
+[
+  {{
+    "id": 1,
+    "description": "Описание шага",
+    "tool": "название инструмента",
+    "parameters": {{"param": "value"}},
+    "expected_result": "Ожидаемый результат"
+  }}
+]
+
+Никакого дополнительного текста, только JSON!
 """
         
         try:
             response = await mistral_chat(prompt)
-            plan_data = json.loads(response)
+            
+            # Очищаем ответ от markdown и лишнего текста
+            response = response.strip()
+            if response.startswith("```json"):
+                response = response[7:]
+            if response.startswith("```"):
+                response = response[3:]
+            if response.endswith("```"):
+                response = response[:-3]
+            response = response.strip()
+            
+            # Пытаемся распарсить как массив
+            try:
+                steps_data = json.loads(response)
+            except:
+                # Если не массив, ищем JSON в тексте
+                import re
+                json_match = re.search(r'\[[\s\S]*\]', response)
+                if json_match:
+                    steps_data = json.loads(json_match.group())
+                else:
+                    logger.error(f"Failed to parse plan: {response[:200]}")
+                    return []
             
             return [
                 Step(
@@ -160,7 +182,7 @@ class TaskPlanner:
                     parameters=step["parameters"],
                     expected_result=step["expected_result"]
                 )
-                for step in plan_data.get("steps", [])
+                for step in steps_data
             ]
         except Exception as e:
             logger.error(f"Planner error: {e}")
