@@ -372,37 +372,66 @@ class FeedbackLoop:
         """
         Оценивает результат выполнения
         """
+        if not actual:
+            return {
+                "success": False,
+                "issues": ["Нет результата"],
+                "recommendations": ["Повторить попытку"],
+                "needs_retry": True,
+                "alternative_approach": ""
+            }
+        
+        if actual.get("success"):
+            return {
+                "success": True,
+                "issues": [],
+                "recommendations": [],
+                "needs_retry": False,
+                "alternative_approach": ""
+            }
+        
+        # Если ошибка — пытаемся получить JSON от LLM
+        error_msg = actual.get("error", "Неизвестная ошибка")
+        
         prompt = f"""
-Оцени результат выполнения:
+Произошла ошибка при выполнении: {error_msg}
 
 Ожидалось: {expected}
-Получено: {actual}
 
-Вопросы:
-1. Результат соответствует ожиданиям?
-2. Есть ли ошибки?
-3. Нужно ли скорректировать стратегию?
+Нужно ли повторить попытку или скорректировать стратегию?
 
-Ответь в формате JSON:
+Ответь ТОЛЬКО JSON:
 {{
-  "success": true/false,
-  "issues": ["Проблема 1", "Проблема 2"],
-  "recommendations": ["Рекомендация 1", "Рекомендация 2"],
-  "needs_retry": true/false,
-  "alternative_approach": "Описание альтернативного подхода"
+  "success": false,
+  "issues": ["{error_msg}"],
+  "recommendations": ["Попробовать другой подход"],
+  "needs_retry": true,
+  "alternative_approach": "Описание"
 }}
 """
         
         try:
             response = await mistral_chat(prompt)
+            
+            # Очищаем от markdown
+            response = response.strip()
+            if response.startswith("```json"):
+                response = response[7:]
+            if response.startswith("```"):
+                response = response[3:]
+            if response.endswith("```"):
+                response = response[:-3]
+            response = response.strip()
+            
             return json.loads(response)
         except Exception as e:
             logger.error(f"Feedback analysis error: {e}")
+            # Fallback — возвращаем безопасный ответ
             return {
                 "success": False,
-                "issues": ["Ошибка анализа"],
-                "recommendations": [],
-                "needs_retry": False,
+                "issues": [error_msg],
+                "recommendations": ["Повторить"],
+                "needs_retry": True,
                 "alternative_approach": ""
             }
     
@@ -410,6 +439,10 @@ class FeedbackLoop:
         """
         Решает стоит ли повторять попытку
         """
+        # Обработка None
+        if not error:
+            return True  # Если ошибка неясна, пробуем снова
+        
         if attempts >= 3:  # Максимум 3 попытки
             return False
         
@@ -422,8 +455,9 @@ class FeedbackLoop:
             "locked"
         ]
         
+        error_lower = error.lower()
         for retryable in retryable_errors:
-            if retryable in error.lower():
+            if retryable in error_lower:
                 return True
         
         return False
@@ -432,16 +466,37 @@ class FeedbackLoop:
         """
         Предлагает альтернативный подход
         """
+        if not issue:
+            issue = "Неизвестная ошибка"
+        
         prompt = f"""
 Произошла проблема: {issue}
 
 Контекст: {context}
 
-Предложи альтернативный подход для решения задачи:
+Предложи альтернативный подход для решения задачи.
+
+Ответь ТОЛЬКО JSON:
+{{
+  "tool": "название инструмента",
+  "parameters": {{}}
+}}
 """
         
         try:
-            return await mistral_chat(prompt)
+            response = await mistral_chat(prompt)
+            
+            # Очищаем от markdown
+            response = response.strip()
+            if response.startswith("```json"):
+                response = response[7:]
+            if response.startswith("```"):
+                response = response[3:]
+            if response.endswith("```"):
+                response = response[:-3]
+            response = response.strip()
+            
+            return response
         except Exception as e:
             logger.error(f"Strategy adjustment error: {e}")
             return ""
@@ -501,10 +556,14 @@ class ReActAgent:
                 attempts += 1
                 
                 # 4. Выполнить действие
-                result = await self.tools.execute(
-                    step.tool,
-                    **step.parameters
-                )
+                try:
+                    result = await self.tools.execute(
+                        step.tool,
+                        **step.parameters
+                    )
+                except Exception as e:
+                    logger.error(f"Step execution error: {e}")
+                    result = {"success": False, "error": str(e)}
                 
                 # 5. Оценить результат
                 feedback = await self.feedback.analyze_result(
@@ -522,16 +581,17 @@ class ReActAgent:
                     })
                     logger.info(f"✅ Шаг {step.id} выполнен успешно")
                 else:
-                    logger.warning(f"❌ Шаг {step.id} не выполнен: {result.get('error')}")
+                    error_msg = result.get("error") if result else "Неизвестная ошибка"
+                    logger.warning(f"❌ Шаг {step.id} не выполнен: {error_msg}")
                     
                     # 6. Самоисправление
-                    if await self.feedback.decide_retry(result.get("error"), attempts):
+                    if await self.feedback.decide_retry(error_msg, attempts):
                         logger.info(f"🔄 Попытка {attempts + 1}/{max_attempts}")
                         continue
                     else:
                         # Корректировка стратегии
                         new_strategy = await self.feedback.adjust_strategy(
-                            result.get("error"),
+                            error_msg,
                             context
                         )
                         
