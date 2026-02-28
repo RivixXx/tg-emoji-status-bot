@@ -126,22 +126,23 @@ class TaskPlanner:
 
 Разбей задачу на последовательные выполнимые шаги.
 
-Каждый шаг должен:
-- Быть атомарным (одно действие)
-- Иметь чёткий критерий успеха
-- Использовать доступные инструменты
+ДОСТУПНЫЕ ИНСТРУМЕНТЫ (использовать ТОЛЬКО эти названия):
+- write_file (параметры: path, content)
+- read_file (параметры: path)
+- run_command (параметры: command, timeout)
+- api_call (параметры: url, method)
+- database_query (параметры: query, params)
 
-Доступные инструменты:
-- write_file, read_file, run_command, api_call, database_query
+Каждый шаг должен использовать ТОЛЬКО один из этих 5 инструментов.
 
 Ответь ТОЛЬКО JSON массивом шагов в формате:
 [
   {{
     "id": 1,
     "description": "Описание шага",
-    "tool": "название инструмента",
-    "parameters": {{"param": "value"}},
-    "expected_result": "Ожидаемый результат"
+    "tool": "write_file",
+    "parameters": {{"path": "/tmp/test.txt", "content": "Hello"}},
+    "expected_result": "Файл создан"
   }}
 ]
 
@@ -174,6 +175,9 @@ class TaskPlanner:
                     logger.error(f"Failed to parse plan: {response[:200]}")
                     return []
             
+            # Фильтруем только допустимые инструменты
+            valid_tools = {"write_file", "read_file", "run_command", "api_call", "database_query"}
+            
             return [
                 Step(
                     id=step["id"],
@@ -183,6 +187,7 @@ class TaskPlanner:
                     expected_result=step["expected_result"]
                 )
                 for step in steps_data
+                if step.get("tool") in valid_tools
             ]
         except Exception as e:
             logger.error(f"Planner error: {e}")
@@ -474,12 +479,17 @@ class FeedbackLoop:
 
 Контекст: {context}
 
-Предложи альтернативный подход для решения задачи.
+Предложи альтернативный подход используя ТОЛЬКО эти инструменты:
+- write_file (параметры: path, content)
+- read_file (параметры: path)
+- run_command (параметры: command, timeout)
+- api_call (параметры: url, method)
+- database_query (параметры: query, params)
 
 Ответь ТОЛЬКО JSON:
 {{
-  "tool": "название инструмента",
-  "parameters": {{}}
+  "tool": "write_file",
+  "parameters": {{"path": "/tmp/test.txt", "content": "Hello"}}
 }}
 """
         
@@ -496,7 +506,15 @@ class FeedbackLoop:
                 response = response[:-3]
             response = response.strip()
             
-            return response
+            # Проверяем что инструмент допустимый
+            try:
+                data = json.loads(response)
+                if data.get("tool") not in {"write_file", "read_file", "run_command", "api_call", "database_query"}:
+                    logger.warning(f"Invalid tool in adjustment: {data.get('tool')}")
+                    return ""
+                return response
+            except:
+                return ""
         except Exception as e:
             logger.error(f"Strategy adjustment error: {e}")
             return ""
@@ -544,6 +562,8 @@ class ReActAgent:
         # 3. Выполнить план по шагам
         results = []
         errors = []
+        strategy_adjustments = 0  # Счётчик корректировок стратегии
+        max_adjustments = 5  # Максимум 5 корректировок
         
         for step in plan:
             logger.info(f"🔧 Выполняю шаг {step.id}: {step.description}")
@@ -552,7 +572,7 @@ class ReActAgent:
             attempts = 0
             max_attempts = 3
 
-            while not success and attempts < max_attempts:
+            while not success and attempts < max_attempts and strategy_adjustments < max_adjustments:
                 # 4. Выполнить действие
                 try:
                     result = await self.tools.execute(
@@ -594,13 +614,19 @@ class ReActAgent:
                         continue
                     else:
                         # Корректировка стратегии
+                        strategy_adjustments += 1
+                        if strategy_adjustments >= max_adjustments:
+                            logger.error("🚨 Превышено количество корректировок стратегии")
+                            errors.append(f"Превышено количество корректировок ({max_adjustments})")
+                            break
+                        
                         new_strategy = await self.feedback.adjust_strategy(
                             error_msg,
                             context
                         )
                         
                         if new_strategy:
-                            logger.info("🔄 Стратегия скорректирована")
+                            logger.info(f"🔄 Стратегия скорректирована (попытка {strategy_adjustments}/{max_adjustments})")
                             # Обновляем шаг
                             try:
                                 strategy_data = json.loads(new_strategy)
