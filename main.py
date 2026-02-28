@@ -928,10 +928,6 @@ async def run_bot_main():
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")
 
-    # Включаем мозг и базовые навыки Карины для твоего MY_ID!
-    register_karina_base_skills(bot_client)
-    logger.info("🧠 Скиллы Карины успешно подключены")
-
     # Определяем твой личный список команд
     commands = [
         types.BotCommand("start", "Перезапустить 🔄"),
@@ -960,19 +956,22 @@ async def run_bot_main():
     ]
 
     # ========== НАСТРОЙКА ПРИВАТНОСТИ МЕНЮ ==========
-    
+    # Применяем ДО включения скиллов чтобы они не перезаписали
+
     # 1. Стираем все команды для обычных пользователей (Default)
     await bot_client(functions.bots.SetBotCommandsRequest(
         scope=types.BotCommandScopeDefault(),
         lang_code='',
         commands=[]
     ))
-    
+    logger.info("🔒 Команды скрыты для обычных пользователей")
+
     # Убираем большую кнопку "Меню/Mini App" слева от поля ввода для чужих
     await bot_client(functions.bots.SetBotMenuButtonRequest(
         user_id=types.InputUserEmpty(),
         button=types.BotMenuButtonCommands()
     ))
+    logger.info("🔒 Кнопка меню скрыта для обычных пользователей")
 
     # 2. Устанавливаем твои роскошные команды ТОЛЬКО для тебя
     my_peer = await bot_client.get_input_entity(MY_ID)
@@ -982,7 +981,8 @@ async def run_bot_main():
         lang_code='ru',
         commands=commands
     ))
-    
+    logger.info("✅ Команды установлены для MY_ID")
+
     # Выдаем тебе кнопку запуска Mini App (слева от поля ввода)
     await bot_client(functions.bots.SetBotMenuButtonRequest(
         user_id=my_peer,
@@ -991,7 +991,12 @@ async def run_bot_main():
             url="https://tg-emoji-status-bot-production.up.railway.app/"
         )
     ))
+    logger.info("✅ Кнопка Mini App установлена для MY_ID")
     # ================================================
+
+    # Включаем мозг и базовые навыки Карины для твоего MY_ID!
+    register_karina_base_skills(bot_client)
+    logger.info("🧠 Скиллы Карины успешно подключены")
     
     # Heartbeat таска для бота
     async def bot_heartbeat():
