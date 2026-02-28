@@ -547,14 +547,12 @@ class ReActAgent:
         
         for step in plan:
             logger.info(f"🔧 Выполняю шаг {step.id}: {step.description}")
-            
+
             success = False
             attempts = 0
             max_attempts = 3
-            
+
             while not success and attempts < max_attempts:
-                attempts += 1
-                
                 # 4. Выполнить действие
                 try:
                     result = await self.tools.execute(
@@ -571,22 +569,28 @@ class ReActAgent:
                     result
                 )
                 
-                if feedback["success"]:
+                # Конвертируем "true"/"false" в bool
+                success_result = feedback.get("success", False)
+                if isinstance(success_result, str):
+                    success_result = success_result.lower() == "true"
+                
+                if success_result:
                     success = True
                     results.append({
                         "step_id": step.id,
                         "success": True,
                         "result": result,
-                        "attempts": attempts
+                        "attempts": attempts + 1
                     })
                     logger.info(f"✅ Шаг {step.id} выполнен успешно")
                 else:
+                    attempts += 1  # Увеличиваем только при ошибке
                     error_msg = result.get("error") if result else "Неизвестная ошибка"
                     logger.warning(f"❌ Шаг {step.id} не выполнен: {error_msg}")
                     
                     # 6. Самоисправление
                     if await self.feedback.decide_retry(error_msg, attempts):
-                        logger.info(f"🔄 Попытка {attempts + 1}/{max_attempts}")
+                        logger.info(f"🔄 Попытка {attempts}/{max_attempts}")
                         continue
                     else:
                         # Корректировка стратегии
