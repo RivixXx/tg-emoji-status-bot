@@ -21,6 +21,7 @@ DEFAULT_LIMITS = {
     "api/calendar": RateLimitConfig(requests=10, window=60),  # 10 в минуту
     "api/memory/search": RateLimitConfig(requests=20, window=60),  # 20 в минуту
     "api/health": RateLimitConfig(requests=30, window=60),  # 30 в минуту
+    "api/health/stats": RateLimitConfig(requests=30, window=60),  # 30 в минуту
     "api/emotion": RateLimitConfig(requests=10, window=60),  # 10 в минуту
     "api/plugins": RateLimitConfig(requests=20, window=60),  # 20 в минуту
 }

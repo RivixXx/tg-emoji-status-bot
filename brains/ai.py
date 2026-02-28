@@ -15,6 +15,7 @@ from brains.employees import get_todays_birthdays
 from brains.mcp_tools import mcp_get_upcoming_birthdays
 from brains.clients import http_client, MISTRAL_URL, MISTRAL_EMBED_URL, MODEL_NAME
 from brains.chat_history import chat_history_cache
+from brains.react_agent import ReActAgent
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,6 @@ ai_breaker = CircuitBreaker()
 # ========== HTTP CLIENT ==========
 
 # Глобальный клиент для переиспользования соединений
-http_client = httpx.AsyncClient(timeout=30.0)
 
 async def mistral_request_with_retry(url, headers, payload, max_retries=2):
     """Запрос к Mistral API с retry для 429 ошибок"""
@@ -391,7 +391,7 @@ async def _process_tool_calls(tool_calls: list, chat_id: int) -> list:
         tool_id = tool_call["id"]  # Mistral использует ID вызова
 
         logger.info(f"🛠 AI вызывает инструмент: {func_name}")
-        
+
         # Выполняем инструмент
         tool_result = await tool_executor.execute_tool(
             tool_name=func_name,
@@ -408,3 +408,46 @@ async def _process_tool_calls(tool_calls: list, chat_id: int) -> list:
         })
 
     return tool_messages
+
+
+# ========== ReAct ИНТЕГРАЦИЯ ==========
+
+async def ask_karina_react(prompt: str, chat_id: int = None) -> str:
+    """
+    Запрос к ReAct агенту для сложных задач
+    
+    Используем когда задача требует:
+    - Множественных шагов
+    - Планирования
+    - Самоисправления
+    """
+    logger.info(f"🧠 ReAct Agent: Задача: {prompt[:50]}...")
+    
+    agent = ReActAgent()
+    result = await agent.execute_task(prompt, user_id=chat_id)
+    
+    # Форматирование результата
+    if result.success:
+        response = f"✅ Задача выполнена!\n\n"
+        response += f"Выполнено шагов: {len(result.steps)}\n\n"
+        
+        for step in result.steps:
+            response += f"• Шаг {step['step_id']}: OK"
+            if step.get('attempts', 1) > 1:
+                response += f" (с попытки {step['attempts']})"
+            response += "\n"
+        
+        if result.lessons_learned:
+            response += f"\n📚 Уроки:\n"
+            for lesson in result.lessons_learned:
+                response += f"• {lesson}\n"
+    else:
+        response = f"❌ Задача не выполнена\n\n"
+        response += f"Ошибки:\n"
+        for error in result.errors:
+            response += f"• {error}\n"
+        
+        response += f"\n💡 Попробуй уточнить задачу или разбить на несколько частей."
+    
+    return response
+

@@ -412,12 +412,12 @@ async def api_memory_search():
         logger.error(f"API Memory Search error: {e}")
         return jsonify({"results": "", "error": str(e)})
 
-@app.route('/api/health')
+@app.route('/api/health/stats')
 async def api_health_stats():
     """Статистика здоровья (для Mini App)"""
     # Rate limiting
     client_ip = request.remote_addr or "unknown"
-    rate_limit_response = await check_rate_limit(client_ip, "api/health")
+    rate_limit_response = await check_rate_limit(client_ip, "api/health/stats")
     if rate_limit_response:
         return rate_limit_response
     

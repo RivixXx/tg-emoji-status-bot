@@ -1,0 +1,576 @@
+"""
+ReAct Agent — Karina AI v5.0
+Автономный агент с архитектурой Reason + Act
+"""
+import json
+import asyncio
+import logging
+from datetime import datetime
+from typing import Optional, Dict, Any, List
+from dataclasses import dataclass, asdict
+
+from .ai import mistral_chat
+from .memory import search_memories
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Step:
+    """Шаг плана"""
+    id: int
+    description: str
+    tool: str
+    parameters: Dict[str, Any]
+    expected_result: str
+
+
+@dataclass
+class TaskResult:
+    """Результат выполнения задачи"""
+    task: str
+    success: bool
+    steps: List[Dict]
+    errors: List[str]
+    lessons_learned: List[str]
+
+
+class LLMEngine:
+    """
+    LLM движок для принятия решений
+    """
+    
+    async def reason(self, context: str, task: str) -> dict:
+        """
+        Анализирует задачу и принимает решение
+        """
+        prompt = f"""
+Контекст: {context}
+
+Задача: {task}
+
+Проанализируй задачу и выбери следующее действие.
+
+Доступные инструменты:
+1. write_file — Создать файл
+2. read_file — Прочитать файл  
+3. run_command — Выполнить команду
+4. api_call — Вызвать API
+5. database_query — SQL запрос
+
+Ответь в формате JSON:
+{{
+  "reasoning": "Твои размышления...",
+  "action": "название инструмента",
+  "parameters": {{...}},
+  "expected_result": "Описание ожидаемого результата"
+}}
+"""
+        
+        try:
+            response = await mistral_chat(prompt)
+            return json.loads(response)
+        except Exception as e:
+            logger.error(f"LLM reasoning error: {e}")
+            return {
+                "reasoning": "Ошибка анализа",
+                "action": None,
+                "parameters": {},
+                "expected_result": ""
+            }
+
+
+class TaskPlanner:
+    """
+    Планировщик задач — разбивает на подзадачи
+    """
+    
+    async def create_plan(self, task: str, context: dict = None) -> List[Step]:
+        """
+        Создаёт план выполнения задачи
+        """
+        prompt = f"""
+Задача: {task}
+
+Контекст: {context or 'Нет дополнительного контекста'}
+
+Разбей задачу на последовательные выполнимые шаги.
+
+Каждый шаг должен:
+- Быть атомарным (одно действие)
+- Иметь чёткий критерий успеха
+- Использовать доступные инструменты
+
+Доступные инструменты:
+- write_file, read_file, run_command, api_call, database_query
+
+Формат ответа (JSON):
+{{
+  "steps": [
+    {{
+      "id": 1,
+      "description": "Описание шага",
+      "tool": "название инструмента",
+      "parameters": {{"param": "value"}},
+      "expected_result": "Ожидаемый результат"
+    }}
+  ]
+}}
+"""
+        
+        try:
+            response = await mistral_chat(prompt)
+            plan_data = json.loads(response)
+            
+            return [
+                Step(
+                    id=step["id"],
+                    description=step["description"],
+                    tool=step["tool"],
+                    parameters=step["parameters"],
+                    expected_result=step["expected_result"]
+                )
+                for step in plan_data.get("steps", [])
+            ]
+        except Exception as e:
+            logger.error(f"Planner error: {e}")
+            return []
+    
+    async def adjust_plan(self, plan: List[Step], error: str) -> List[Step]:
+        """
+        Корректирует план при ошибке
+        """
+        prompt = f"""
+Текущий план:
+{[asdict(step) for step in plan]}
+
+Произошла ошибка: {error}
+
+Скорректируй план чтобы обойти ошибку. Верни новый план в том же формате JSON.
+"""
+        
+        try:
+            response = await mistral_chat(prompt)
+            plan_data = json.loads(response)
+            
+            return [
+                Step(
+                    id=step["id"],
+                    description=step["description"],
+                    tool=step["tool"],
+                    parameters=step["parameters"],
+                    expected_result=step["expected_result"]
+                )
+                for step in plan_data.get("steps", [])
+            ]
+        except Exception as e:
+            logger.error(f"Plan adjustment error: {e}")
+            return plan
+
+
+class ToolRegistry:
+    """
+    Реестр инструментов
+    """
+    
+    def __init__(self):
+        self.tools = {
+            "write_file": self.write_file,
+            "read_file": self.read_file,
+            "run_command": self.run_command,
+            "api_call": self.api_call,
+            "database_query": self.database_query,
+        }
+    
+    async def execute(self, tool_name: str, **kwargs) -> dict:
+        """Выполняет инструмент"""
+        if tool_name not in self.tools:
+            return {
+                "success": False,
+                "error": f"Неизвестный инструмент: {tool_name}"
+            }
+        
+        try:
+            return await self.tools[tool_name](**kwargs)
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def write_file(self, path: str, content: str) -> dict:
+        """Создаёт файл"""
+        try:
+            import os
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            logger.info(f"✅ Файл создан: {path}")
+            return {
+                "success": True,
+                "message": f"Файл создан: {path}"
+            }
+        except Exception as e:
+            logger.error(f"write_file error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def read_file(self, path: str) -> dict:
+        """Читает файл"""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            return {
+                "success": True,
+                "content": content
+            }
+        except Exception as e:
+            logger.error(f"read_file error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def run_command(self, command: str, timeout: int = 60) -> dict:
+        """Выполняет команду в shell"""
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=timeout
+            )
+            
+            return {
+                "success": process.returncode == 0,
+                "stdout": stdout.decode('utf-8'),
+                "stderr": stderr.decode('utf-8'),
+                "returncode": process.returncode
+            }
+        except asyncio.TimeoutError:
+            return {
+                "success": False,
+                "error": f"Timeout after {timeout}s"
+            }
+        except Exception as e:
+            logger.error(f"run_command error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def api_call(self, url: str, method: str = "GET", **kwargs) -> dict:
+        """Вызывает HTTP API"""
+        try:
+            import aiohttp
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.request(method, url, **kwargs) as response:
+                    data = await response.json()
+                    
+                    return {
+                        "success": response.status == 200,
+                        "data": data,
+                        "status_code": response.status
+                    }
+        except Exception as e:
+            logger.error(f"api_call error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def database_query(self, query: str, params: dict = None) -> dict:
+        """SQL запрос к базе данных Supabase"""
+        try:
+            from brains.mcp_vpn_shop import supabase
+            
+            if params:
+                result = await supabase.execute(query, params)
+            else:
+                result = await supabase.execute(query)
+            
+            return {
+                "success": True,
+                "data": result
+            }
+        except Exception as e:
+            logger.error(f"database_query error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+
+class FeedbackLoop:
+    """
+    Анализ результатов и самоисправление
+    """
+    
+    async def analyze_result(self, expected: str, actual: dict) -> dict:
+        """
+        Оценивает результат выполнения
+        """
+        prompt = f"""
+Оцени результат выполнения:
+
+Ожидалось: {expected}
+Получено: {actual}
+
+Вопросы:
+1. Результат соответствует ожиданиям?
+2. Есть ли ошибки?
+3. Нужно ли скорректировать стратегию?
+
+Ответь в формате JSON:
+{{
+  "success": true/false,
+  "issues": ["Проблема 1", "Проблема 2"],
+  "recommendations": ["Рекомендация 1", "Рекомендация 2"],
+  "needs_retry": true/false,
+  "alternative_approach": "Описание альтернативного подхода"
+}}
+"""
+        
+        try:
+            response = await mistral_chat(prompt)
+            return json.loads(response)
+        except Exception as e:
+            logger.error(f"Feedback analysis error: {e}")
+            return {
+                "success": False,
+                "issues": ["Ошибка анализа"],
+                "recommendations": [],
+                "needs_retry": False,
+                "alternative_approach": ""
+            }
+    
+    async def decide_retry(self, error: str, attempts: int) -> bool:
+        """
+        Решает стоит ли повторять попытку
+        """
+        if attempts >= 3:  # Максимум 3 попытки
+            return False
+        
+        # Анализ типа ошибки
+        retryable_errors = [
+            "timeout",
+            "connection",
+            "rate limit",
+            "temporary",
+            "locked"
+        ]
+        
+        for retryable in retryable_errors:
+            if retryable in error.lower():
+                return True
+        
+        return False
+    
+    async def adjust_strategy(self, issue: str, context: dict) -> str:
+        """
+        Предлагает альтернативный подход
+        """
+        prompt = f"""
+Произошла проблема: {issue}
+
+Контекст: {context}
+
+Предложи альтернативный подход для решения задачи:
+"""
+        
+        try:
+            return await mistral_chat(prompt)
+        except Exception as e:
+            logger.error(f"Strategy adjustment error: {e}")
+            return ""
+
+
+class ReActAgent:
+    """
+    Автономный агент с ReAct архитектурой
+    """
+    
+    def __init__(self):
+        self.llm = LLMEngine()
+        self.planner = TaskPlanner()
+        self.tools = ToolRegistry()
+        self.feedback = FeedbackLoop()
+        self.short_term_memory = []
+    
+    async def execute_task(self, task: str, user_id: int = None) -> TaskResult:
+        """
+        Выполняет задачу используя ReAct подход
+        """
+        logger.info(f"🚀 ReAct Agent: Начинаю выполнение задачи: {task}")
+        
+        # 1. Загрузить контекст из памяти (если есть)
+        context = {
+            "user_id": user_id,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # 2. Создать план
+        logger.info("📋 Создаю план...")
+        plan = await self.planner.create_plan(task, context)
+        
+        if not plan:
+            return TaskResult(
+                task=task,
+                success=False,
+                steps=[],
+                errors=["Не удалось создать план"],
+                lessons_learned=[]
+            )
+        
+        logger.info(f"✅ План создан: {len(plan)} шагов")
+        
+        # 3. Выполнить план по шагам
+        results = []
+        errors = []
+        
+        for step in plan:
+            logger.info(f"🔧 Выполняю шаг {step.id}: {step.description}")
+            
+            success = False
+            attempts = 0
+            max_attempts = 3
+            
+            while not success and attempts < max_attempts:
+                attempts += 1
+                
+                # 4. Выполнить действие
+                result = await self.tools.execute(
+                    step.tool,
+                    **step.parameters
+                )
+                
+                # 5. Оценить результат
+                feedback = await self.feedback.analyze_result(
+                    step.expected_result,
+                    result
+                )
+                
+                if feedback["success"]:
+                    success = True
+                    results.append({
+                        "step_id": step.id,
+                        "success": True,
+                        "result": result,
+                        "attempts": attempts
+                    })
+                    logger.info(f"✅ Шаг {step.id} выполнен успешно")
+                else:
+                    logger.warning(f"❌ Шаг {step.id} не выполнен: {result.get('error')}")
+                    
+                    # 6. Самоисправление
+                    if await self.feedback.decide_retry(result.get("error"), attempts):
+                        logger.info(f"🔄 Попытка {attempts + 1}/{max_attempts}")
+                        continue
+                    else:
+                        # Корректировка стратегии
+                        new_strategy = await self.feedback.adjust_strategy(
+                            result.get("error"),
+                            context
+                        )
+                        
+                        if new_strategy:
+                            logger.info("🔄 Стратегия скорректирована")
+                            # Обновляем шаг
+                            try:
+                                strategy_data = json.loads(new_strategy)
+                                step.tool = strategy_data.get("tool", step.tool)
+                                step.parameters = strategy_data.get("parameters", step.parameters)
+                            except:
+                                pass
+                        
+                        attempts = 0  # Сброс попыток для нового подхода
+            
+            if not success:
+                errors.append(f"Шаг {step.id} не выполнен после {max_attempts} попыток")
+                logger.error(f"❌ Шаг {step.id} провален")
+                break
+        
+        # 7. Сохранить урок в память
+        lessons = []
+        if errors:
+            lessons.append(f"Избегать: {', '.join(errors)}")
+        if success:
+            lessons.append("Успешная стратегия выполнения")
+        
+        # 8. Добавить в краткосрочную память
+        self.short_term_memory.append({
+            "task": task,
+            "result": "success" if not errors else "failed",
+            "timestamp": datetime.now()
+        })
+        
+        # Ограничиваем размер памяти
+        if len(self.short_term_memory) > 50:
+            self.short_term_memory = self.short_term_memory[-50:]
+        
+        return TaskResult(
+            task=task,
+            success=len(errors) == 0,
+            steps=results,
+            errors=errors,
+            lessons_learned=lessons
+        )
+    
+    def get_memory_context(self) -> str:
+        """Возвращает контекст из краткосрочной памяти"""
+        if not self.short_term_memory:
+            return "Нет предыдущего контекста"
+        
+        context = "История сессии:\n"
+        for entry in self.short_term_memory[-10:]:
+            context += f"- {entry['task']}: {entry['result']}\n"
+        
+        return context
+    
+    def clear_memory(self):
+        """Очищает краткосрочную память"""
+        self.short_term_memory = []
+
+
+# ========== ИНТЕГРАЦИЯ В ASK_KARINA ==========
+
+async def ask_karina_react(prompt: str, chat_id: int = None) -> str:
+    """
+    Запрос к ReAct агенту
+    """
+    agent = ReActAgent()
+    
+    result = await agent.execute_task(prompt, user_id=chat_id)
+    
+    # Форматирование результата
+    if result.success:
+        response = f"✅ Задача выполнена!\n\n"
+        response += f"Выполнено шагов: {len(result.steps)}\n"
+        
+        for step in result.steps:
+            response += f"• Шаг {step['step_id']}: OK"
+            if step.get('attempts', 1) > 1:
+                response += f" (с попытки {step['attempts']})"
+            response += "\n"
+    else:
+        response = f"❌ Задача не выполнена\n\n"
+        response += f"Ошибки:\n"
+        for error in result.errors:
+            response += f"• {error}\n"
+    
+    if result.lessons_learned:
+        response += f"\n📚 Уроки:\n"
+        for lesson in result.lessons_learned:
+            response += f"• {lesson}\n"
+    
+    return response

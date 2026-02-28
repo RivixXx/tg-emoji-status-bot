@@ -218,6 +218,34 @@ def register_karina_base_skills(client):
         await event.respond("🧹 Кэш напоминаний очищен! Теперь все напоминания будут уникальными! ✨")
         raise events.StopPropagation
 
+    @client.on(events.NewMessage(pattern='/agent'))
+    async def agent_handler(event):
+        """Скилл: ReAct агент для сложных задач"""
+        from brains.ai import ask_karina_react
+        
+        logger.info(f"🤖 ReAct Agent: Запрос от {event.chat_id}")
+        
+        task = event.text.replace('/agent', '').strip()
+        
+        if not task:
+            await event.respond(
+                "🤖 **ReAct Агент**\n\n"
+                "Я могу выполнить сложную задачу, требующую планирования и множественных шагов.\n\n"
+                "**Примеры:**\n"
+                "• `Создай файл test.py с функцией hello()`\n"
+                "• `Установи библиотеку requests`\n"
+                "• `Проверь работу бота и перезапусти если нужно`\n\n"
+                "💡 Агент будет выполнять задачу пошагово, анализировать ошибки и корректировать стратегию."
+            )
+            raise events.StopPropagation
+        
+        await event.respond("🧠 Анализирую задачу и составляю план...")
+        
+        result = await ask_karina_react(task, chat_id=event.chat_id)
+        
+        await event.respond(result)
+        raise events.StopPropagation
+
     @client.on(events.NewMessage(pattern='/summary'))
     async def summary_handler(event):
         """Скилл: Еженедельный отчёт Smart Summary"""
