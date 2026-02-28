@@ -1,83 +1,56 @@
--- VPN Shop Tables Migration
--- Karina AI v1.1
--- Дата: 25 февраля 2026 г.
+-- =====================================================
+-- VPN Shop Миграция
+-- Таблицы для продажи VPN-доступов через Telegram-бота
+-- =====================================================
 
-
--- ============================================================================
--- ТАБЛИЦЫ
--- ============================================================================
-
--- Таблица для пользователей VPN Shop
+-- Пользователи VPN Shop
 CREATE TABLE IF NOT EXISTS vpn_shop_users (
     user_id BIGINT PRIMARY KEY,
+    state TEXT DEFAULT 'NEW',  -- NEW, WAITING_EMAIL, WAITING_CODE, REGISTERED
     email TEXT,
-    state TEXT DEFAULT 'NEW',
     verification_code TEXT,
-    referred_by BIGINT REFERENCES vpn_shop_users(user_id),
-    balance NUMERIC DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Таблица для рефералов
-CREATE TABLE IF NOT EXISTS vpn_shop_referrals (
-    id BIGSERIAL PRIMARY KEY,
-    referrer_id BIGINT REFERENCES vpn_shop_users(user_id),
-    referred_id BIGINT REFERENCES vpn_shop_users(user_id),
-    commission NUMERIC DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Таблица для заказов
-CREATE TABLE IF NOT EXISTS vpn_shop_orders (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT REFERENCES vpn_shop_users(user_id),
-    months INTEGER,
-    amount NUMERIC,
-    status TEXT DEFAULT 'pending',
+    balance DECIMAL DEFAULT 0,
     vless_key TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    referred_by BIGINT REFERENCES vpn_shop_users(user_id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
-
--- ============================================================================
--- ИНДЕКСЫ
--- ============================================================================
 
 CREATE INDEX IF NOT EXISTS idx_vpn_users_state ON vpn_shop_users(state);
+CREATE INDEX IF NOT EXISTS idx_vpn_users_email ON vpn_shop_users(email);
 CREATE INDEX IF NOT EXISTS idx_vpn_users_referred_by ON vpn_shop_users(referred_by);
-CREATE INDEX IF NOT EXISTS idx_vpn_referrals_referrer ON vpn_shop_referrals(referrer_id);
-CREATE INDEX IF NOT EXISTS idx_vpn_referrals_referred ON vpn_shop_referrals(referred_id);
-CREATE INDEX IF NOT EXISTS idx_vpn_orders_user ON vpn_shop_orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_vpn_orders_status ON vpn_shop_orders(status);
 
--- ============================================================================
--- КОММЕНТАРИИ
--- ============================================================================
+-- Заказы VPN
+CREATE TABLE IF NOT EXISTS vpn_shop_orders (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES vpn_shop_users(user_id),
+    months INT NOT NULL,
+    amount DECIMAL NOT NULL,
+    status TEXT DEFAULT 'pending',  -- pending, completed, cancelled, refunded
+    vless_key TEXT,
+    payment_method TEXT,  -- sbp, crypto, balance
+    created_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP
+);
 
-COMMENT ON TABLE vpn_shop_users IS 'Пользователи VPN Shop с состояниями и рефералами';
-COMMENT ON COLUMN vpn_shop_users.user_id IS 'Telegram User ID';
-COMMENT ON COLUMN vpn_shop_users.email IS 'Email пользователя для верификации';
-COMMENT ON COLUMN vpn_shop_users.state IS 'Состояние: NEW, WAITING_EMAIL, WAITING_CODE, REGISTERED';
-COMMENT ON COLUMN vpn_shop_users.verification_code IS '4-значный код подтверждения';
-COMMENT ON COLUMN vpn_shop_users.referred_by IS 'ID реферера (кто пригласил)';
-COMMENT ON COLUMN vpn_shop_users.balance IS 'Баланс для реферальных комиссий';
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON vpn_shop_orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON vpn_shop_orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON vpn_shop_orders(created_at);
 
-COMMENT ON TABLE vpn_shop_referrals IS 'Реферальные связи и комиссии';
-COMMENT ON COLUMN vpn_shop_referrals.referrer_id IS 'ID пригласившего';
-COMMENT ON COLUMN vpn_shop_referrals.referred_id IS 'ID приглашённого';
-COMMENT ON COLUMN vpn_shop_referrals.commission IS 'Сумма комиссии (10% от покупки)';
+-- Рефералы
+CREATE TABLE IF NOT EXISTS vpn_shop_referrals (
+    id SERIAL PRIMARY KEY,
+    referrer_id BIGINT REFERENCES vpn_shop_users(user_id),
+    referred_id BIGINT REFERENCES vpn_shop_users(user_id),
+    commission DECIMAL DEFAULT 0,
+    from_order_id INT REFERENCES vpn_shop_orders(id),
+    created_at TIMESTAMP DEFAULT NOW()
+);
 
-COMMENT ON TABLE vpn_shop_orders IS 'Заказы на VPN подписки';
-COMMENT ON COLUMN vpn_shop_orders.months IS 'Срок подписки в месяцах';
-COMMENT ON COLUMN vpn_shop_orders.amount IS 'Сумма заказа в рублях';
-COMMENT ON COLUMN vpn_shop_orders.status IS 'Статус: pending, completed, cancelled';
-COMMENT ON COLUMN vpn_shop_orders.vless_key IS 'VLESS ключ доступа';
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON vpn_shop_referrals(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_referred_id ON vpn_shop_referrals(referred_id);
 
--- ============================================================================
--- ТРИГГЕРЫ (автоматическое обновление updated_at)
--- ============================================================================
-
--- Функция для обновления updated_at
+-- Триггер для обновления updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -86,59 +59,38 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Триггер для vpn_shop_users
-DROP TRIGGER IF EXISTS update_vpn_shop_users_updated_at ON vpn_shop_users;
-CREATE TRIGGER update_vpn_shop_users_updated_at
+CREATE TRIGGER update_vpn_users_updated_at
     BEFORE UPDATE ON vpn_shop_users
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- ============================================================================
--- RLS (Row Level Security) - ОПЦИОНАЛЬНО
--- ============================================================================
+-- RPC функция для поиска рефералов
+CREATE OR REPLACE FUNCTION get_referral_stats(user_id_param BIGINT)
+RETURNS TABLE(
+    total_referrals BIGINT,
+    total_commission DECIMAL,
+    active_referrals BIGINT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        COUNT(DISTINCT r.referred_id)::BIGINT,
+        COALESCE(SUM(r.commission), 0)::DECIMAL,
+        COUNT(DISTINCT CASE WHEN u.state = 'REGISTERED' THEN r.referred_id END)::BIGINT
+    FROM vpn_shop_referrals r
+    LEFT JOIN vpn_shop_users u ON r.referred_id = u.user_id
+    WHERE r.referrer_id = user_id_param;
+END;
+$$ LANGUAGE plpgsql;
 
--- Включить RLS (если нужно)
--- ALTER TABLE vpn_shop_users ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE vpn_shop_referrals ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE vpn_shop_orders ENABLE ROW LEVEL SECURITY;
+-- Тестовые данные (для разработки)
+-- INSERT INTO vpn_shop_users (user_id, state, email, balance) VALUES
+-- (7480815681, 'REGISTERED', 'test@example.com', 100);
 
--- Политики (пример)
--- CREATE POLICY "Users can view own data" ON vpn_shop_users
---     FOR SELECT USING (user_id = current_setting('app.current_user_id')::bigint);
+-- Комментарии
+COMMENT ON TABLE vpn_shop_users IS 'Пользователи VPN Shop';
+COMMENT ON TABLE vpn_shop_orders IS 'Заказы на VPN подписки';
+COMMENT ON TABLE vpn_shop_referrals IS 'Реферальные начисления';
 
--- ============================================================================
--- ПРИМЕРЫ ДАННЫХ (для тестирования)
--- ============================================================================
-
--- Тестовый пользователь
--- INSERT INTO vpn_shop_users (user_id, email, state, balance) 
--- VALUES (123456789, 'test@test.com', 'REGISTERED', 0);
-
--- Тестовый заказ
--- INSERT INTO vpn_shop_orders (user_id, months, amount, status, vless_key) 
--- VALUES (123456789, 1, 150, 'completed', 'vless://test-key');
-
--- ============================================================================
--- ЗАПРОСЫ ДЛЯ ПРОВЕРКИ
--- ============================================================================
-
--- Проверка количества пользователей
--- SELECT state, COUNT(*) FROM vpn_shop_users GROUP BY state;
-
--- Проверка рефералов
--- SELECT referrer_id, COUNT(*) as referrals, SUM(commission) as total_commission 
--- FROM vpn_shop_referrals GROUP BY referrer_id;
-
--- Проверка заказов
--- SELECT status, COUNT(*) as orders, SUM(amount) as total_amount 
--- FROM vpn_shop_orders GROUP BY status;
-
--- ============================================================================
--- ОТКАТ (DROP TABLES)
--- ============================================================================
-
--- Для удаления таблиц (если нужно):
--- DROP TABLE IF EXISTS vpn_shop_orders CASCADE;
--- DROP TABLE IF EXISTS vpn_shop_referrals CASCADE;
--- DROP TABLE IF EXISTS vpn_shop_users CASCADE;
--- DROP FUNCTION IF EXISTS update_updated_at_column CASCADE;
+COMMENT ON COLUMN vpn_shop_users.state IS 'NEW: новый, WAITING_EMAIL: ожидание email, WAITING_CODE: ожидание кода, REGISTERED: зарегистрирован';
+COMMENT ON COLUMN vpn_shop_orders.status IS 'pending: ожидает оплаты, completed: оплачен, cancelled: отменён, refunded: возвращён';
