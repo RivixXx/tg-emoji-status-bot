@@ -5,14 +5,44 @@ ReAct Agent — Karina AI v5.0
 import json
 import asyncio
 import logging
+import httpx
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 
-from .ai import mistral_chat
-from .memory import search_memories
+from brains.config import MISTRAL_API_KEY
 
 logger = logging.getLogger(__name__)
+
+# Глобальный HTTP клиент
+http_client = httpx.AsyncClient(timeout=60.0)
+
+MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
+MISTRAL_EMBED_URL = "https://api.mistral.ai/v1/embeddings"
+MODEL_NAME = "mistral-small-latest"
+
+
+async def mistral_chat(prompt: str) -> str:
+    """Запрос к Mistral AI"""
+    headers = {
+        "Authorization": f"Bearer {MISTRAL_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.7
+    }
+    
+    try:
+        result = await http_client.post(MISTRAL_URL, headers=headers, json=payload)
+        result.raise_for_status()
+        data = result.json()
+        return data['choices'][0]['message']['content']
+    except Exception as e:
+        logger.error(f"Mistral chat error: {e}")
+        return ""
 
 
 @dataclass

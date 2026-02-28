@@ -15,7 +15,6 @@ from brains.employees import get_todays_birthdays
 from brains.mcp_tools import mcp_get_upcoming_birthdays
 from brains.clients import http_client, MISTRAL_URL, MISTRAL_EMBED_URL, MODEL_NAME
 from brains.chat_history import chat_history_cache
-from brains.react_agent import ReActAgent
 
 logger = logging.getLogger(__name__)
 
@@ -421,6 +420,9 @@ async def ask_karina_react(prompt: str, chat_id: int = None) -> str:
     - Планирования
     - Самоисправления
     """
+    # Импортируем внутри функции чтобы избежать циклического импорта
+    from brains.react_agent import ReActAgent
+    
     logger.info(f"🧠 ReAct Agent: Задача: {prompt[:50]}...")
     
     agent = ReActAgent()

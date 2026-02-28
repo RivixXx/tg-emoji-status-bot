@@ -221,8 +221,6 @@ def register_karina_base_skills(client):
     @client.on(events.NewMessage(pattern='/agent'))
     async def agent_handler(event):
         """Скилл: ReAct агент для сложных задач"""
-        from brains.ai import ask_karina_react
-        
         logger.info(f"🤖 ReAct Agent: Запрос от {event.chat_id}")
         
         task = event.text.replace('/agent', '').strip()
@@ -240,6 +238,9 @@ def register_karina_base_skills(client):
             raise events.StopPropagation
         
         await event.respond("🧠 Анализирую задачу и составляю план...")
+        
+        # Импортируем внутри функции
+        from brains.ai import ask_karina_react
         
         result = await ask_karina_react(task, chat_id=event.chat_id)
         
