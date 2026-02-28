@@ -127,22 +127,26 @@ class TaskPlanner:
 Разбей задачу на последовательные выполнимые шаги.
 
 ДОСТУПНЫЕ ИНСТРУМЕНТЫ (использовать ТОЛЬКО эти названия):
-- write_file (параметры: path, content)
-- read_file (параметры: path)
-- run_command (параметры: command, timeout)
-- api_call (параметры: url, method)
-- database_query (параметры: query, params)
+- write_file (параметры: path, content) — Создать/записать файл
+- read_file (параметры: path) — Прочитать файл
+- run_command (параметры: command, timeout) — Выполнить команду shell
+- api_call (параметры: url, method) — HTTP запрос (ТОЛЬКО реальные URL!)
+- database_query (параметры: query, params) — SQL запрос к Supabase
+- get_calendar (параметры: date) — Проверить календарь на дату (формат: YYYY-MM-DD)
 
-Каждый шаг должен использовать ТОЛЬКО один из этих 5 инструментов.
+Важно:
+- Для get_calendar используй ТОЛЬКО реальные даты
+- Для api_call используй ТОЛЬКО существующие URL
+- Не выдумывай несуществующие API
 
 Ответь ТОЛЬКО JSON массивом шагов в формате:
 [
   {{
     "id": 1,
     "description": "Описание шага",
-    "tool": "write_file",
-    "parameters": {{"path": "/tmp/test.txt", "content": "Hello"}},
-    "expected_result": "Файл создан"
+    "tool": "get_calendar",
+    "parameters": {{"date": "2026-02-28"}},
+    "expected_result": "События календаря"
   }}
 ]
 
@@ -176,7 +180,7 @@ class TaskPlanner:
                     return []
             
             # Фильтруем только допустимые инструменты
-            valid_tools = {"write_file", "read_file", "run_command", "api_call", "database_query"}
+            valid_tools = {"write_file", "read_file", "run_command", "api_call", "database_query", "get_calendar"}
             
             return [
                 Step(
@@ -237,6 +241,7 @@ class ToolRegistry:
             "run_command": self.run_command,
             "api_call": self.api_call,
             "database_query": self.database_query,
+            "get_calendar": self.get_calendar,
         }
     
     async def execute(self, tool_name: str, **kwargs) -> dict:
@@ -366,6 +371,31 @@ class ToolRegistry:
                 "success": False,
                 "error": str(e)
             }
+    
+    async def get_calendar(self, date: str) -> dict:
+        """Проверка календаря на дату"""
+        try:
+            from brains.calendar import get_upcoming_events
+            
+            # Получаем события
+            events = await get_upcoming_events(max_results=10)
+            
+            # Фильтруем по дате если указано
+            if date:
+                # Простая фильтрация по строке
+                filtered = [e for e in events.split('\n') if date in e] if events else []
+                events = '\n'.join(filtered)
+            
+            return {
+                "success": True,
+                "data": events or "Событий нет"
+            }
+        except Exception as e:
+            logger.error(f"get_calendar error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
 
 
 class FeedbackLoop:
@@ -485,6 +515,7 @@ class FeedbackLoop:
 - run_command (параметры: command, timeout)
 - api_call (параметры: url, method)
 - database_query (параметры: query, params)
+- get_calendar (параметры: date)
 
 Ответь ТОЛЬКО JSON:
 {{
@@ -507,9 +538,11 @@ class FeedbackLoop:
             response = response.strip()
             
             # Проверяем что инструмент допустимый
+            valid_tools = {"write_file", "read_file", "run_command", "api_call", "database_query", "get_calendar"}
+            
             try:
                 data = json.loads(response)
-                if data.get("tool") not in {"write_file", "read_file", "run_command", "api_call", "database_query"}:
+                if data.get("tool") not in valid_tools:
                     logger.warning(f"Invalid tool in adjustment: {data.get('tool')}")
                     return ""
                 return response
