@@ -170,18 +170,21 @@ def register_vpn_handlers(bot_client: TelegramClient):
             fire_and_forget(mcp_vpn_update_user_state(user_id, "REGISTERED"))
             await event.delete()
             await media_manager.send_banner(bot_client, user_id, "MENU", BANNER_FILES["MENU"], get_main_menu_text(user), get_main_menu_keyboard())
+            raise events.StopPropagation()
 
         elif data == "menu_main" or data == "menu_back":
             await event.delete()
             await media_manager.send_banner(bot_client, user_id, "MENU", BANNER_FILES["MENU"], get_main_menu_text(user), get_main_menu_keyboard())
+            raise events.StopPropagation()
 
         elif data == "menu_tariffs":
             await event.edit(get_tariffs_text(), buttons=get_tariffs_keyboard())
+            raise events.StopPropagation()
 
         elif data == "buy_trial":
             if user.get("trial_used"):
                 await event.answer("⚠️ Вы уже использовали тестовый период!", alert=True)
-                return
+                raise events.StopPropagation()
             
             await event.edit("⏳ **Генерирую тестовый доступ...**")
             success = await issue_vpn_key(bot_client, user_id, is_trial=True)
@@ -191,11 +194,13 @@ def register_vpn_handlers(bot_client: TelegramClient):
                 logger.info(f"🎁 Trial activated for {user_id}")
             else:
                 await event.edit("❌ Не удалось выдать тест. Попробуйте позже.")
+            raise events.StopPropagation()
 
         elif data.startswith("pay_"):
             months = int(data.split("_")[1])
             amount = 150 if months == 1 else (400 if months == 3 else 750)
             await event.edit(f"💳 **Выбор метода оплаты: {amount} ₽**", buttons=get_payment_methods_keyboard(amount, months))
+            raise events.StopPropagation()
 
         elif data.startswith("pay_crypto_"):
             parts = data.split("_")
@@ -213,6 +218,7 @@ def register_vpn_handlers(bot_client: TelegramClient):
                 await event.edit(f"✅ **Счет готов!**\n\nСумма: `{invoice['amount']} {invoice['asset']}`\n\nНажми на кнопку ниже, чтобы перейти к оплате. Ключ придет сразу после подтверждения.", buttons=keyboard)
             else:
                 await event.edit("❌ Ошибка платежного шлюза. Попробуйте другой метод.")
+            raise events.StopPropagation()
 
         elif data.startswith("check_inv_"):
             parts = data.split("_")
@@ -224,17 +230,22 @@ def register_vpn_handlers(bot_client: TelegramClient):
                 await issue_vpn_key(bot_client, user_id, months=months, amount=amount)
             else:
                 await event.answer("⌛️ Транзакция еще в обработке. Подождите немного...", alert=True)
+            raise events.StopPropagation()
 
         elif data == "menu_profile":
             await event.edit(get_profile_text(user), buttons=get_back_keyboard(main=True))
+            raise events.StopPropagation()
 
         elif data == "menu_instructions":
             await event.delete()
             await media_manager.send_banner(bot_client, user_id, "INSTRUCTIONS", BANNER_FILES["INSTRUCTIONS"], get_instructions_text(), get_platform_keyboard())
+            raise events.StopPropagation()
 
         elif data == "get_my_key":
             await event.answer("🔍 Проверяю подписку...", alert=False)
             await issue_vpn_key(bot_client, user_id)
+            raise events.StopPropagation()
 
         else:
             await event.answer("👌", alert=False)
+            raise events.StopPropagation()
