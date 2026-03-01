@@ -22,22 +22,17 @@ async def check_expiring_subscriptions(bot_client: TelegramClient):
     ]
 
     try:
-        # В идеале здесь должен быть вызов к Supabase, 
-        # который вернет юзеров для каждого интервала
-        # Для примера возьмем общую функцию:
         expiring_users = await mcp_vpn_get_users_with_expiring_sub(days=3)
         
         for user in expiring_users:
             user_id = user["user_id"]
-            # Логика предотвращения спама (отправляем только 1 раз для каждого интервала)
-            # Можно хранить last_notified_at в БД
             
             try:
                 await bot_client.send_message(
                     user_id,
-                    f"👋 **ПРИВЕТ!**
+                    f"""👋 **ПРИВЕТ!**
 
-{check_points[0]['msg']}",
+{check_points[0]['msg']}""",
                     buttons=[[Button.inline("💎 Продлить сейчас", b"menu_tariffs")]]
                 )
                 logger.info(f"📩 Notification sent to {user_id}")
