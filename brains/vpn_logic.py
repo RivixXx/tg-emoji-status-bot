@@ -110,7 +110,7 @@ async def issue_vpn_key(bot_client, user_id, months=1, is_trial=False, amount=0)
             bio.seek(0)
 
             if is_trial:
-                caption = get_trial_success_text() + f"\n`{vless_key}`"
+                caption = f"{get_trial_success_text()}\n`{vless_key}`"
                 fire_and_forget(notify_trial(bot_client, user_id))
             else:
                 caption = f"🚀 **ПОДПИСКА АКТИВИРОВАНА!**\n\nДоступ открыт на **{expire_days} дней**.\n\nТвой ключ:\n`{vless_key}`\n\n*Нажми на ключ выше, чтобы скопировать.*"
@@ -143,7 +143,8 @@ def register_vpn_handlers(bot_client: TelegramClient):
                 except: pass
             user = await mcp_vpn_create_user(user_id, referred_by=referred_by)
             # Алерт о новом юзере
-            first_name = (await event.get_sender()).first_name or "Unknown"
+            sender = await event.get_sender()
+            first_name = sender.first_name if sender and sender.first_name else "Unknown"
             fire_and_forget(notify_new_user(bot_client, user_id, first_name))
         
         state = user["state"]
@@ -186,7 +187,7 @@ def register_vpn_handlers(bot_client: TelegramClient):
             success = await issue_vpn_key(bot_client, user_id, is_trial=True)
             if success:
                 update_user_cache(user_id, {"trial_used": True})
-                # Здесь должен быть mcp вызов для сохранения в БД
+                fire_and_forget(mcp_vpn_update_user_state(user_id, "REGISTERED", trial_used=True))
                 logger.info(f"🎁 Trial activated for {user_id}")
             else:
                 await event.edit("❌ Не удалось выдать тест. Попробуйте позже.")
