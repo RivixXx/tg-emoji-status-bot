@@ -155,6 +155,9 @@ async def run_bot_main():
     await bot_client.run_until_disconnected()
 
 async def run_userbot_main():
+    # Небольшая пауза чтобы не конфликтовать с bot_client при старте
+    await asyncio.sleep(2)
+    
     await user_client.connect()
     if not await user_client.is_user_authorized():
         await report_status("userbot", "unauthorized")
@@ -185,7 +188,11 @@ async def component_supervisor(coro_func, name):
         except Exception as e:
             err_text = str(e)
             await record_error(f"{name} crashed: {err_text}")
-            fire_and_forget(notify_system_error(bot_client, name, err_text))
+            
+            # Не спамим алертом если это просто блокировка базы (она сама пройдет)
+            if "database is locked" not in err_text:
+                fire_and_forget(notify_system_error(bot_client, name, err_text))
+            
             logger.error(f"💀 Supervisor: {name} упал: {err_text}. Рестарт через {backoff}с...")
             await report_status(name, "failed")
         
@@ -202,7 +209,8 @@ async def amain():
     plugin_manager.load_config()
     discovered = plugin_manager.discover_plugins()
     for plugin_name in discovered:
-        if plugin_name == "base": continue
+        # Более жесткая фильтрация системных файлов
+        if plugin_name in ["base", "__init__", "base.py"]: continue
         plugin = plugin_manager.load_plugin(plugin_name)
         if plugin: plugin_manager.register_plugin(plugin)
     await plugin_manager.initialize_all()
@@ -221,6 +229,8 @@ async def amain():
         await plugin_manager.shutdown_all()
         sub_monitor.cancel()
         await asyncio.gather(bot_supervisor, user_supervisor, return_exceptions=True)
+        
+        # Гарантированное закрытие сессий
         if bot_client.is_connected(): await bot_client.disconnect()
         if user_client.is_connected(): await user_client.disconnect()
 

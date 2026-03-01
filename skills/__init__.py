@@ -77,10 +77,16 @@ def register_discovery_skills(client):
 
 def register_karina_base_skills(client):
     # Обработчик callback_query (кнопки напоминаний и здоровья)
-    @client.on(events.CallbackQuery(data=re.compile(b"confirm_|skip_|snooze_|acknowledge")))
+    @client.on(events.CallbackQuery())
     async def reminder_callback_handler(event):
         """Обработка нажатий на кнопки напоминаний"""
         data = event.data.decode('utf-8') if isinstance(event.data, bytes) else event.data
+        
+        # КРИТИЧЕСКИЙ ФИЛЬТР: Игнорируем всё, что относится к VPN
+        vpn_prefixes = ["menu_", "pay_", "buy_", "check_", "instr_", "faq_", "accept_", "decline_", "refill_", "ref_"]
+        if any(data.startswith(prefix) for prefix in vpn_prefixes):
+            return # Передаем управление другим обработчикам (в vpn_logic.py)
+
         logger.info(f"🔘 Callback: {data} от {event.chat_id}")
         
         # Получаем объект сообщения явно, чтобы избежать AttributeError
