@@ -55,6 +55,19 @@ async def mcp_vpn_update_user_state(user_id: int, state: str, **kwargs) -> bool:
         return False
 
 
+async def mcp_vpn_update_balance(user_id: int, amount: float) -> bool:
+    """Обновляет баланс пользователя"""
+    try:
+        response = supabase_client.table("vpn_shop_users").update({
+            "balance": amount,
+            "updated_at": datetime.now().isoformat()
+        }).eq("user_id", user_id).execute()
+        return bool(response.data)
+    except Exception as e:
+        logger.error(f"Error updating balance: {e}")
+        return False
+
+
 # ========== SUBSCRIPTIONS ==========
 
 async def mcp_vpn_activate_sub(user_id: int, months: int) -> bool:
@@ -68,7 +81,9 @@ async def mcp_vpn_activate_sub(user_id: int, months: int) -> bool:
         current_end = user.get("sub_end")
         
         if current_end:
-            start_from = max(now, datetime.fromisoformat(current_end.replace('Z', '+00:00')))
+            # Преобразуем строку в datetime, обрабатывая суффикс Z если есть
+            ts = current_end.replace('Z', '+00:00')
+            start_from = max(now, datetime.fromisoformat(ts).replace(tzinfo=None))
         else:
             start_from = now
             
@@ -128,6 +143,23 @@ async def mcp_vpn_update_order(order_id: int, status: str, **kwargs) -> bool:
         return bool(response.data)
     except Exception as e:
         logger.error(f"Error updating order: {e}")
+        return False
+
+
+# ========== REFERRALS & BALANCE ==========
+
+async def mcp_vpn_add_referral(referrer_id: int, referred_id: int, commission: float = 0) -> bool:
+    """Добавляет реферальную связь"""
+    try:
+        data = {
+            "referrer_id": referrer_id,
+            "referred_id": referred_id,
+            "commission": commission
+        }
+        response = supabase_client.table("vpn_shop_referrals").insert(data).execute()
+        return bool(response.data)
+    except Exception as e:
+        logger.error(f"Error adding referral: {e}")
         return False
 
 
