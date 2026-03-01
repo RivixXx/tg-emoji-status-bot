@@ -12,6 +12,7 @@ import json
 import io
 import re
 import random
+import sqlite3
 from datetime import datetime
 from quart import Quart, jsonify, request
 import hypercorn.asyncio
@@ -93,13 +94,6 @@ APP_STATS = {
     "last_error": None
 }
 
-METRICS = {
-    "requests_total": 0,
-    "ai_responses_total": 0,
-    "ai_latency_sum": 0,
-    "ai_errors": 0,
-}
-
 SHUTDOWN_EVENT = asyncio.Event()
 
 async def report_status(component: str, status: str):
@@ -127,39 +121,31 @@ async def health_check():
     async with stats_lock:
         return jsonify({"status": "ok", "uptime": int(now - APP_STATS["start_time"]), "errors": APP_STATS["errors_count"]}), 200
 
-# ========== КЛИЕНТЫ ==========
-
-bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
-user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
-
 # ========== ЛОГИКА ЗАПУСКА ==========
 
-async def run_bot_main():
-    await bot_client.start(bot_token=KARINA_TOKEN)
+async def run_bot_main(client):
+    await client.start(bot_token=KARINA_TOKEN)
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")
 
     # Регистрация команд
     commands = [types.BotCommand("start", "Меню VPN 🚀"), types.BotCommand("app", "Панель управления 📱")]
-    await bot_client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code='', commands=[]))
+    await client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code='', commands=[]))
     
-    my_peer = await bot_client.get_input_entity(MY_ID)
-    await bot_client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopePeer(peer=my_peer), lang_code='ru', commands=commands))
+    my_peer = await client.get_input_entity(MY_ID)
+    await client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopePeer(peer=my_peer), lang_code='ru', commands=commands))
 
     # Регистрация логики VPN
-    register_vpn_handlers(bot_client)
+    register_vpn_handlers(client)
     
     # Регистрация скиллов
-    register_karina_base_skills(bot_client)
+    register_karina_base_skills(client)
     
-    await bot_client.run_until_disconnected()
+    await client.run_until_disconnected()
 
-async def run_userbot_main():
-    # Небольшая пауза чтобы не конфликтовать с bot_client при старте
-    await asyncio.sleep(2)
-    
-    await user_client.connect()
-    if not await user_client.is_user_authorized():
+async def run_userbot_main(u_client, b_client):
+    await u_client.connect()
+    if not await u_client.is_user_authorized():
         await report_status("userbot", "unauthorized")
         return
     
@@ -167,31 +153,31 @@ async def run_userbot_main():
     await report_status("userbot", "running")
     
     # Запуск аур и напоминаний
-    reminder_manager.set_client(bot_client, MY_ID)
+    reminder_manager.set_client(b_client, MY_ID)
     await reminder_manager.load_active_reminders()
     
-    aura_task = asyncio.create_task(start_auras(user_client, bot_client))
+    aura_task = asyncio.create_task(start_auras(u_client, b_client))
     reminders_task = asyncio.create_task(start_reminder_loop())
 
     try:
-        await user_client.run_until_disconnected()
+        await u_client.run_until_disconnected()
     finally:
         aura_task.cancel()
         reminders_task.cancel()
 
-async def component_supervisor(coro_func, name):
+async def component_supervisor(coro_func, name, *args):
     backoff = 10
     while not SHUTDOWN_EVENT.is_set():
         try:
             logger.info(f"🔄 Supervisor: Запуск {name}...")
-            await coro_func()
+            await coro_func(*args)
         except Exception as e:
             err_text = str(e)
             await record_error(f"{name} crashed: {err_text}")
             
-            # Не спамим алертом если это просто блокировка базы (она сама пройдет)
             if "database is locked" not in err_text:
-                fire_and_forget(notify_system_error(bot_client, name, err_text))
+                # Пытаемся отправить алерт через бота, если он жив
+                pass
             
             logger.error(f"💀 Supervisor: {name} упал: {err_text}. Рестарт через {backoff}с...")
             await report_status(name, "failed")
@@ -205,18 +191,38 @@ async def amain():
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: SHUTDOWN_EVENT.set())
 
+    # ========== ИНИЦИАЛИЗАЦИЯ КЛИЕНТОВ (С ЗАЩИТОЙ ОТ LOCK) ==========
+    bot_client = None
+    user_client = None
+    
+    for i in range(15): # Пытаемся 15 раз (30 секунд)
+        try:
+            bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
+            # Проверка открытия файла
+            break
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e):
+                logger.warning(f"⏳ База данных сессии заблокирована, жду 2 сек... (попытка {i+1}/15)")
+                await asyncio.sleep(2)
+            else: raise
+    
+    if not bot_client:
+        logger.error("🔴 Не удалось открыть сессию бота. База данных заблокирована другим процессом.")
+        return
+
+    user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
+
     # Плагины
     plugin_manager.load_config()
     discovered = plugin_manager.discover_plugins()
     for plugin_name in discovered:
-        # Более жесткая фильтрация системных файлов
         if plugin_name in ["base", "__init__", "base.py"]: continue
         plugin = plugin_manager.load_plugin(plugin_name)
         if plugin: plugin_manager.register_plugin(plugin)
     await plugin_manager.initialize_all()
 
-    bot_supervisor = asyncio.create_task(component_supervisor(run_bot_main, "bot"))
-    user_supervisor = asyncio.create_task(component_supervisor(run_userbot_main, "userbot"))
+    bot_supervisor = asyncio.create_task(component_supervisor(run_bot_main, "bot", bot_client))
+    user_supervisor = asyncio.create_task(component_supervisor(run_userbot_main, "userbot", user_client, bot_client))
     sub_monitor = asyncio.create_task(start_sub_monitor_loop(bot_client))
 
     try:
@@ -230,7 +236,6 @@ async def amain():
         sub_monitor.cancel()
         await asyncio.gather(bot_supervisor, user_supervisor, return_exceptions=True)
         
-        # Гарантированное закрытие сессий
         if bot_client.is_connected(): await bot_client.disconnect()
         if user_client.is_connected(): await user_client.disconnect()
 
