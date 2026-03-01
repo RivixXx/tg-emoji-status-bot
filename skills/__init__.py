@@ -76,8 +76,8 @@ def register_discovery_skills(client):
             await event.reply("❌ Это обычный эмодзи или текст. \nЧтобы получить ID для статуса, отправь **кастомный** эмодзи (из любого Premium-набора).")
 
 def register_karina_base_skills(client):
-    # Обработчик callback_query (кнопки напоминаний)
-    @client.on(events.CallbackQuery())
+    # Обработчик callback_query (кнопки напоминаний и здоровья)
+    @client.on(events.CallbackQuery(data=re.compile(b"confirm_|skip_|snooze_|acknowledge")))
     async def reminder_callback_handler(event):
         """Обработка нажатий на кнопки напоминаний"""
         data = event.data.decode('utf-8') if isinstance(event.data, bytes) else event.data
