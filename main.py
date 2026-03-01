@@ -41,6 +41,7 @@ from brains.mcp_vpn_shop import (
     calculate_referral_commission
 )
 from brains.vpn_ui import (
+    BANNER_FILES,
     get_main_menu_text,
     get_main_menu_keyboard,
     get_profile_text,
@@ -83,6 +84,10 @@ from brains.vpn_ui import (
     get_payment_keyboard,
     get_back_keyboard,
 )
+from brains.media import media_manager
+from brains.vpn_logic import register_vpn_handlers, set_fire_and_forget
+from brains.alerts import notify_system_error
+from brains.subscription_monitor import start_sub_monitor_loop
 from auras import state, start_auras
 from skills import register_karina_base_skills
 from plugins import plugin_manager
@@ -122,6 +127,9 @@ def fire_and_forget(coro):
                 logging.error(f"⚠️ Ошибка в фоновой задаче: {err_msg}")
     
     task.add_done_callback(log_error)
+
+# Передаем функцию fire_and_forget в логику VPN
+set_fire_and_forget(fire_and_forget)
 
 # ========== СТРУКТУРИРОВАННОЕ ЛОГИРОВАНИЕ ==========
 
@@ -819,11 +827,16 @@ async def run_bot_main():
         elif data == "refill_confirm":
             await event.edit("⏳ **ПРОВЕРКА ПЛАТЕЖА**\n\nВаш запрос отправлен на проверку.")
 
-        # ========== НОВОЕ INLINE-МЕНЮ ==========
+        # ========== НОВОЕ INLINE-МЕНЮ (С БАННЕРАМИ) ==========
         
         elif data == "menu_main" or data == "menu_back":
-            # Текстовое меню (быстро)
-            await event.edit(get_main_menu_text(user), buttons=get_main_menu_keyboard())
+            # Удаляем старое сообщение для чистоты при переходе к медиа
+            fire_and_forget(event.delete())
+            await media_manager.send_banner(
+                bot_client, event.chat_id, "MENU", 
+                BANNER_FILES["MENU"], get_main_menu_text(user), 
+                get_main_menu_keyboard()
+            )
 
         elif data == "menu_profile":
             await event.edit(get_profile_text(user), buttons=get_back_keyboard(main=True))
@@ -838,7 +851,13 @@ async def run_bot_main():
             await event.edit(get_download_text(), buttons=get_download_keyboard())
 
         elif data == "menu_instructions":
-            await event.edit(get_instructions_text(), buttons=get_platform_keyboard())
+            # Удаляем старое сообщение
+            fire_and_forget(event.delete())
+            await media_manager.send_banner(
+                bot_client, event.chat_id, "INSTRUCTIONS", 
+                BANNER_FILES["INSTRUCTIONS"], get_instructions_text(), 
+                get_platform_keyboard()
+            )
 
         elif data == "instr_android":
             await event.edit(get_instruction_platform_text("android"), buttons=[
@@ -913,8 +932,13 @@ async def run_bot_main():
         # ========== ПОДДЕРЖКА ==========
         
         elif data == "menu_support":
-            # Текстовая поддержка (быстро)
-            await event.edit(get_support_text(), buttons=get_support_keyboard())
+            # Удаляем старое сообщение
+            fire_and_forget(event.delete())
+            await media_manager.send_banner(
+                bot_client, event.chat_id, "SUPPORT", 
+                BANNER_FILES["SUPPORT"], get_support_text(), 
+                get_support_keyboard()
+            )
 
         elif data == "support_write":
             await event.edit(get_support_write_text(), buttons=get_support_write_keyboard())
