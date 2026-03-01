@@ -164,7 +164,6 @@ async def run_userbot_main():
     await report_status("userbot", "running")
     
     # Запуск аур и напоминаний
-    from brains.health import get_health_stats
     reminder_manager.set_client(bot_client, MY_ID)
     await reminder_manager.load_active_reminders()
     
@@ -203,6 +202,7 @@ async def amain():
     plugin_manager.load_config()
     discovered = plugin_manager.discover_plugins()
     for plugin_name in discovered:
+        if plugin_name == "base": continue
         plugin = plugin_manager.load_plugin(plugin_name)
         if plugin: plugin_manager.register_plugin(plugin)
     await plugin_manager.initialize_all()
