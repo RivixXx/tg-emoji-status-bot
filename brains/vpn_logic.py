@@ -112,11 +112,15 @@ def register_vpn_handlers(bot_client: TelegramClient):
         user_id = event.sender_id
         text = event.text.strip() if event.text else ""
         
+        # ЕСЛИ ЭТО НЕ КОМАНДА /start И НЕ ДРУГАЯ VPN КОМАНДА - ПРОПУСКАЕМ К ИИ
+        if not text.startswith('/start') and not text.startswith('/vpn'):
+            return
+
         user = await get_user_fast(user_id)
         if not user:
             referred_by = None
-            if event.text and event.text.startswith('/start') and len(event.text.split()) > 1:
-                try: referred_by = int(event.text.split()[1])
+            if text.startswith('/start') and len(text.split()) > 1:
+                try: referred_by = int(text.split()[1])
                 except: pass
             user = await mcp_vpn_create_user(user_id, referred_by=referred_by)
             # Алерт о новом юзере

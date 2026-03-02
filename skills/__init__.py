@@ -1119,7 +1119,10 @@ def register_karina_base_skills(client):
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
         """Интеллектуальное общение (текст + голос + фото) + Обработка напоминаний"""
-        logger.info(f"📩 Сообщение от {event.chat_id}: {event.text[:50] if event.text else 'no text'}")
+        if not event.text and not event.photo and not event.voice:
+            return
+
+        logger.info(f"📩 ВХОДЯЩЕЕ: от {event.chat_id} | Текст: {event.text[:50] if event.text else 'Медиа'}")
 
         # ========== ОБРАБОТКА ФОТО ==========
         if event.photo or (event.document and event.document.mime_type.startswith('image/')):
