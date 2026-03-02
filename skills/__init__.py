@@ -2,6 +2,7 @@ import logging
 import random
 import os
 import asyncio
+import re
 from telethon import events, types
 from brains.weather import get_weather
 from brains.ai import ask_karina
@@ -1020,7 +1021,7 @@ def register_karina_base_skills(client):
 
             for v in voices:
                 current = "⭐" if v["id"] == settings["voice"] else "  "
-                message += f"{current} **{v['name']}** (`/{ttsvoice} {v['id']}`)\n"
+                message += f"{current} **{v['name']}** (`/ttsvoice {v['id']}`)\n"
                 message += f"   {v['style']}. {v['description']}\n\n"
 
             message += """**Пример:**

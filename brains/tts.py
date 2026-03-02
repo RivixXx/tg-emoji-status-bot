@@ -14,6 +14,7 @@ https://github.com/snakers4/silero-models
 import logging
 import os
 import re
+import numpy as np
 from pathlib import Path
 from typing import Optional, Dict, List
 from datetime import datetime, timezone

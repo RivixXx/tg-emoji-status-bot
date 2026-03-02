@@ -166,7 +166,7 @@ async def create_event(summary, start_time, duration_minutes=30, description=Non
         # Автоматическое создание напоминания
         if create_reminder:
             try:
-                from brains.reminders import reminder_manager, ReminderType
+                from brains.reminders import reminder_manager, ReminderType, Reminder
                 
                 reminder_time = start_time - timedelta(minutes=15)
                 now = datetime.now(timezone(timedelta(hours=3)))

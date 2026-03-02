@@ -11,7 +11,7 @@ from brains.news import get_latest_news
 from brains.employees import get_todays_birthdays, generate_birthday_card
 from brains.ai import ask_karina
 from brains.reminder_generator import generate_aura_phrase
-from brains.reminders import reminder_manager, ReminderType
+from brains.reminders import reminder_manager, ReminderType, Reminder
 from auras.phrases import (
     BIO_PHRASES,
     MORNING_GREETINGS,
