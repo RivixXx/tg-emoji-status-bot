@@ -53,22 +53,13 @@ def get_supabase_client() -> Optional[Client]:
         _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
         logger.info("✅ Supabase клиент инициализирован")
         return _supabase_client
-    except SupabaseException as e:
+    except Exception as e:
         logger.error(f"❌ Ошибка инициализации Supabase: {e}")
         return None
-    except Exception as e:
-        logger.error(f"❌ Неожиданная ошибка при инициализации Supabase: {e}")
-        return None
 
 
-# Свойство для совместимости со старым кодом
-@property
-def supabase_client() -> Client:
-    """Обратная совместимость — возвращает клиент или выбрасывает ошибку"""
-    client = get_supabase_client()
-    if client is None:
-        raise RuntimeError("Supabase клиент не инициализирован. Проверьте SUPABASE_URL и SUPABASE_KEY")
-    return client
+# Для обратной совместимости — просто переменная
+supabase_client = None
 
 
 # ============================================================================

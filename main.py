@@ -18,9 +18,14 @@ from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION, MY_ID
 from brains.reminders import reminder_manager, start_reminder_loop
 from brains.vpn_logic import register_vpn_handlers, set_fire_and_forget
 from brains.subscription_monitor import start_sub_monitor_loop
+from brains.clients import get_supabase_client, supabase_client
 from auras import start_auras
 from skills import register_karina_base_skills
 from plugins import plugin_manager
+
+# ========== ИНИЦИАЛИЗАЦИЯ SUPABASE ==========
+# Инициализируем клиент при загрузке модуля
+supabase_client = get_supabase_client()
 
 # ========== FIRE-AND-FORGET (ДИСПЕТЧЕР ФОНОВЫХ ЗАДАЧ) ==========
 
