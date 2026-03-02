@@ -1119,13 +1119,22 @@ def register_karina_base_skills(client):
     @client.on(events.NewMessage(incoming=True))
     async def chat_handler(event):
         """Интеллектуальное общение (текст + голос + фото) + Обработка напоминаний"""
-        if not event.text and not event.photo and not event.voice:
+        
+        # БЕЗУСЛОВНЫЙ ЛОГ КАЖДОГО СООБЩЕНИЯ ДЛЯ ОТЛАДКИ
+        logger.info(f"💥 СЫРОЕ ВХОДЯЩЕЕ СООБЩЕНИЕ: От={event.chat_id}, Тип={type(event.message.media)}")
+        
+        # Проверка на наличие текста или медиа (более безопасная)
+        has_text = bool(event.text and event.text.strip())
+        has_media = getattr(event.message, 'photo', None) or getattr(event.message, 'voice', None) or getattr(event.message, 'document', None)
+        
+        if not has_text and not has_media:
+            logger.debug("⏭️ Пропуск: пустое сообщение без медиа")
             return
 
         logger.info(f"📩 ВХОДЯЩЕЕ: от {event.chat_id} | Текст: {event.text[:50] if event.text else 'Медиа'}")
 
         # ========== ОБРАБОТКА ФОТО ==========
-        if event.photo or (event.document and event.document.mime_type.startswith('image/')):
+        if event.photo or (event.document and getattr(event.document, 'mime_type', '').startswith('image/')):
             logger.info(f"🖼️ Фото получено от {event.chat_id}")
             if not event.is_private:
                 logger.info("⚠️ Пропуск (не личный чат)")

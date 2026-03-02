@@ -12,7 +12,7 @@ import sqlite3
 from quart import Quart, jsonify
 import hypercorn.asyncio
 from hypercorn.config import Config
-from telethon import functions, types, TelegramClient
+from telethon import functions, types, TelegramClient, events
 from telethon.sessions import StringSession
 from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION, MY_ID
 from brains.reminders import reminder_manager, start_reminder_loop
@@ -108,26 +108,18 @@ async def health_check():
 # ========== ЛОГИКА ЗАПУСКА ==========
 
 async def run_bot_main(client):
-    if not client.is_connected():
-        await client.connect()
-    if not await client.is_user_authorized():
-        await client.start(bot_token=KARINA_TOKEN)
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")
 
-    # Регистрация команд
+    # Регистрация команд (отправляем в API)
     commands = [types.BotCommand("start", "Меню VPN 🚀"), types.BotCommand("app", "Панель управления 📱")]
-    await client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code='', commands=[]))
-    
-    my_peer = await client.get_input_entity(MY_ID)
-    await client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopePeer(peer=my_peer), lang_code='ru', commands=commands))
+    try:
+        await client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code='', commands=[]))
+        my_peer = await client.get_input_entity(MY_ID)
+        await client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopePeer(peer=my_peer), lang_code='ru', commands=commands))
+    except Exception as e:
+        logger.warning(f"Не удалось установить команды бота: {e}")
 
-    # Регистрация логики VPN
-    register_vpn_handlers(client)
-    
-    # Регистрация скиллов
-    register_karina_base_skills(client)
-    
     await client.run_until_disconnected()
 
 async def run_userbot_main(u_client, b_client):
@@ -161,10 +153,6 @@ async def component_supervisor(coro_func, name, *args):
             err_text = str(e)
             await record_error(f"{name} crashed: {err_text}")
             
-            if "database is locked" not in err_text:
-                # Пытаемся отправить алерт через бота, если он жив
-                pass
-            
             logger.error(f"💀 Supervisor: {name} упал: {err_text}. Рестарт через {backoff}с...")
             await report_status(name, "failed")
         
@@ -177,10 +165,14 @@ async def amain():
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: SHUTDOWN_EVENT.set())
 
-    # ========== ИНИЦИАЛИЗАЦИЯ КЛИЕНТОВ (С ЗАЩИТОЙ ОТ LOCK) ==========
+    # ========== ИНИЦИАЛИЗАЦИЯ КЛИЕНТОВ ==========
     bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
-    user_client = None
     
+    # 1. РЕГИСТРИРУЕМ ХЕНДЛЕРЫ ДО ПОДКЛЮЧЕНИЯ, ЧТОБЫ НЕ ПРОПУСТИТЬ НИ ОДНОГО СООБЩЕНИЯ
+    register_vpn_handlers(bot_client)
+    register_karina_base_skills(bot_client)
+    
+    # 2. ПОДКЛЮЧАЕМСЯ К TELEGRAM (С ЗАЩИТОЙ ОТ LOCK)
     for i in range(15): # Пытаемся 15 раз (30 секунд)
         try:
             await bot_client.connect()
@@ -208,8 +200,12 @@ async def amain():
         if plugin: plugin_manager.register_plugin(plugin)
     await plugin_manager.initialize_all()
 
+    # Запускаем задачи
     bot_supervisor = asyncio.create_task(component_supervisor(run_bot_main, "bot", bot_client))
     user_supervisor = asyncio.create_task(component_supervisor(run_userbot_main, "userbot", user_client, bot_client))
+    
+    # Даем боту время полностью инициализироваться перед запуском монитора подписок
+    await asyncio.sleep(3)
     sub_monitor = asyncio.create_task(start_sub_monitor_loop(bot_client))
 
     try:
