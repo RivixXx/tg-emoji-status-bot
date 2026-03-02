@@ -205,7 +205,7 @@ async def check_overwork_task(karina_client, user_id: int):
                     f"😟 **Карина беспокоится...**\n\n{alert}\n\nПожалуйста, позаботься об отдыхе! 💙",
                     parse_mode='markdown'
                 )
-                logger.info(f"⚠️ Отправлено предупреждение о переработке")
+                logger.info("⚠️ Отправлено предупреждение о переработке")
             except Exception as e:
                 logger.error(f"Ошибка отправки предупреждения: {e}")
 
@@ -221,7 +221,7 @@ async def check_overwork_task(karina_client, user_id: int):
                         "Может стоит закончить пораньше? 😊",
                         parse_mode='markdown'
                     )
-                    logger.info(f"⚠️ Отправлено предупреждение о работе в выходной")
+                    logger.info("⚠️ Отправлено предупреждение о работе в выходной")
                 except Exception as e:
                     logger.error(f"Ошибка отправки предупреждения: {e}")
 
@@ -241,7 +241,7 @@ async def start_auras(user_client, karina_client):
 
             reconnect_attempts = 0  # Сброс счётчика ошибок при успешной итерации
 
-        except PersistentTimestampOutdatedError as e:
+        except PersistentTimestampOutdatedError:
             logger.warning(f"⚠️ Telegram: рассинхронизация timestamp (попытка {reconnect_attempts + 1}/{max_reconnect_attempts})")
             reconnect_attempts += 1
 

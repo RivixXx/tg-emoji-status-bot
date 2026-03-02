@@ -196,7 +196,7 @@ def register_karina_base_skills(client):
         success = await save_memory(text_to_save, metadata={"source": "manual_command", "user_id": event.chat_id})
 
         if success:
-            await event.respond(f"✅ Запомнила! Теперь я буду это знать. 😊")
+            await event.respond("✅ Запомнила! Теперь я буду это знать. 😊")
         else:
             await event.respond("Ой, что-то пошло не так при сохранении в базу памяти. 😔")
         raise events.StopPropagation
@@ -429,7 +429,6 @@ def register_karina_base_skills(client):
         """Скилл: Свежие новости телематики"""
         logger.info(f"📩 /news от пользователя {event.chat_id}")
 
-        from brains.news import get_latest_news
 
         # Проверяем аргументы
         args = event.text.split()
@@ -450,7 +449,7 @@ def register_karina_base_skills(client):
         """Скилл: Принудительное обновление новостей (очистка кэша)"""
         logger.info(f"📩 /newsforce от пользователя {event.chat_id}")
 
-        from brains.news import get_latest_news, clear_news_cache
+        from brains.news import clear_news_cache
 
         clear_news_cache()
         await event.respond("🧹 Кэш новостей очищен. Загружаю свежие данные...")
@@ -569,7 +568,7 @@ def register_karina_base_skills(client):
             if success:
                 await event.respond(f"✅ Отлично! Привычка '{habit_name}' отмечена!")
             else:
-                await event.respond(f"❌ Ошибка при сохранении")
+                await event.respond("❌ Ошибка при сохранении")
             raise events.StopPropagation
 
         elif command == 'skip' and len(args) >= 3:
@@ -1061,9 +1060,9 @@ def register_karina_base_skills(client):
         voice = settings.get("voice", "ksenia")
 
         test_phrases = [
-            f"Привет! Я Карина, твой персональный помощник.",
+            "Привет! Я Карина, твой персональный помощник.",
             f"Как я звучу? Мой голос — {voice}.",
-            f"Надеюсь, тебе нравится мой голос!",
+            "Надеюсь, тебе нравится мой голос!",
         ]
 
         import random
@@ -1243,7 +1242,7 @@ def register_karina_base_skills(client):
             
             # Проверка что ещё не отвечали на это сообщение
             if hasattr(event, '_responded') and event._responded:
-                logger.debug(f"⚠️ Пропуск (уже отвечали)")
+                logger.debug("⚠️ Пропуск (уже отвечали)")
                 return
             
             event._responded = True
@@ -1257,4 +1256,4 @@ def register_karina_base_skills(client):
             # 3. Выводим текст с эффектом печатной машинки
             await send_with_typewriter(event, response)
         else:
-            logger.info(f"⚠️ Пропуск (не личный чат)")
+            logger.info("⚠️ Пропуск (не личный чат)")

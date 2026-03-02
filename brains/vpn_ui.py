@@ -4,7 +4,7 @@ Karina VPN UI - Dark Cyberpunk / Professional Space UI
 """
 import os
 from telethon.tl.custom import Button
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 # ========== ПУТИ К БАННЕРАМ ==========
 BANNERS_PATH = "banners"

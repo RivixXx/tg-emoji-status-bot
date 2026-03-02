@@ -7,7 +7,7 @@
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from brains.clients import supabase_client
 from brains.ai import ask_karina
 from brains.calendar import get_today_calendar_events

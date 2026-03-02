@@ -8,8 +8,6 @@
 import httpx
 import logging
 import json
-import random
-from datetime import datetime, timezone
 from brains.config import MISTRAL_API_KEY
 
 logger = logging.getLogger(__name__)

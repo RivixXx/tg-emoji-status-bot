@@ -1,9 +1,7 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
 from telethon import TelegramClient, Button
 from brains.mcp_vpn_shop import mcp_vpn_get_users_with_expiring_sub
-from brains.vpn_ui import get_tariffs_keyboard
 
 logger = logging.getLogger(__name__)
 

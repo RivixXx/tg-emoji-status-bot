@@ -24,7 +24,7 @@ async def save_health_record(confirmed: bool, timestamp: datetime = None):
         response = supabase_client.table("health_records").insert(data).execute()
         
         if response.data:
-            logger.info(f"✅ Здоровье: запись сохранена")
+            logger.info("✅ Здоровье: запись сохранена")
             return True
         else:
             logger.error(f"Supabase Save Error: {response}")

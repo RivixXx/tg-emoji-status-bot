@@ -7,7 +7,7 @@ import asyncio
 import logging
 import httpx
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 from dataclasses import dataclass, asdict
 
 from brains.config import MISTRAL_API_KEY
@@ -729,7 +729,7 @@ async def ask_karina_react(prompt: str, chat_id: int = None) -> str:
     
     # Форматирование результата
     if result.success:
-        response = f"✅ Задача выполнена!\n\n"
+        response = "✅ Задача выполнена!\n\n"
         response += f"Выполнено шагов: {len(result.steps)}\n"
         
         for step in result.steps:
@@ -738,13 +738,13 @@ async def ask_karina_react(prompt: str, chat_id: int = None) -> str:
                 response += f" (с попытки {step['attempts']})"
             response += "\n"
     else:
-        response = f"❌ Задача не выполнена\n\n"
-        response += f"Ошибки:\n"
+        response = "❌ Задача не выполнена\n\n"
+        response += "Ошибки:\n"
         for error in result.errors:
             response += f"• {error}\n"
     
     if result.lessons_learned:
-        response += f"\n📚 Уроки:\n"
+        response += "\n📚 Уроки:\n"
         for lesson in result.lessons_learned:
             response += f"• {lesson}\n"
     

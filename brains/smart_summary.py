@@ -4,7 +4,7 @@ Smart Summary для Karina AI
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict
 from brains.clients import supabase_client
 from brains.ai import ask_karina
 
@@ -116,7 +116,6 @@ async def _get_calendar_summary(days: int) -> Dict:
     """Получает сводку по календарю"""
     try:
         # Пробуем импортировать функции календаря
-        from brains.calendar import get_upcoming_events
         
         # Получаем события за период
         # (в реальной реализации нужно добавить метод для получения прошлых событий)

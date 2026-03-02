@@ -3,8 +3,7 @@ Aura Settings для Karina AI
 Конфигурация и управление аурами (emoji-статусы, био, напоминания)
 """
 import logging
-import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from dataclasses import dataclass, asdict
 from brains.clients import supabase_client
 

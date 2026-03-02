@@ -4,7 +4,6 @@ RAG Память Karina AI
 """
 import logging
 import asyncio
-from typing import Optional, List, Dict
 from brains.clients import supabase_client, http_client, MISTRAL_EMBED_URL
 from brains.config import MISTRAL_API_KEY
 

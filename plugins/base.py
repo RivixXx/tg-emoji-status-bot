@@ -122,7 +122,7 @@ class PluginManager:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             
-            logger.info(f"💾 Конфигурация плагинов сохранена")
+            logger.info("💾 Конфигурация плагинов сохранена")
         except Exception as e:
             logger.error(f"❌ Ошибка сохранения конфигурации плагинов: {e}")
     

@@ -227,7 +227,7 @@ class MarzbanClient:
             if "links" in data and data["links"]:
                 for link in data["links"]:
                     if link.startswith("vless://"):
-                        logger.info(f"✅ Найдена прямая VLESS ссылка")
+                        logger.info("✅ Найдена прямая VLESS ссылка")
                         return link
 
             # Приоритет 2: Subscription URL (если links нет)

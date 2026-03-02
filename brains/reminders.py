@@ -9,9 +9,8 @@
 """
 import asyncio
 import logging
-import json
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 import random

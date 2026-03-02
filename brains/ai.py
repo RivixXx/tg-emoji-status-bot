@@ -4,16 +4,10 @@ import json
 import asyncio
 import time
 from datetime import datetime
-from typing import List, Dict, Any
 
 from brains.config import MISTRAL_API_KEY
-from brains.memory import search_memories, save_memory
-from brains.calendar import create_event, get_upcoming_events, get_conflict_report
-from brains.weather import get_weather
-from brains.health import get_health_report_text
-from brains.employees import get_todays_birthdays
-from brains.mcp_tools import mcp_get_upcoming_birthdays
-from brains.clients import http_client, MISTRAL_URL, MISTRAL_EMBED_URL, MODEL_NAME
+from brains.memory import search_memories
+from brains.clients import http_client, MISTRAL_URL, MODEL_NAME
 from brains.chat_history import chat_history_cache
 
 logger = logging.getLogger(__name__)
@@ -430,7 +424,7 @@ async def ask_karina_react(prompt: str, chat_id: int = None) -> str:
     
     # Форматирование результата
     if result.success:
-        response = f"✅ Задача выполнена!\n\n"
+        response = "✅ Задача выполнена!\n\n"
         response += f"Выполнено шагов: {len(result.steps)}\n\n"
         
         for step in result.steps:
@@ -440,16 +434,16 @@ async def ask_karina_react(prompt: str, chat_id: int = None) -> str:
             response += "\n"
         
         if result.lessons_learned:
-            response += f"\n📚 Уроки:\n"
+            response += "\n📚 Уроки:\n"
             for lesson in result.lessons_learned:
                 response += f"• {lesson}\n"
     else:
-        response = f"❌ Задача не выполнена\n\n"
-        response += f"Ошибки:\n"
+        response = "❌ Задача не выполнена\n\n"
+        response += "Ошибки:\n"
         for error in result.errors:
             response += f"• {error}\n"
         
-        response += f"\n💡 Попробуй уточнить задачу или разбить на несколько частей."
+        response += "\n💡 Попробуй уточнить задачу или разбить на несколько частей."
     
     return response
 

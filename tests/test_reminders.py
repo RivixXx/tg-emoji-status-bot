@@ -2,9 +2,8 @@
 Tests for Reminder Manager
 """
 import pytest
-import asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 import sys
 import os
 

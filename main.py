@@ -8,33 +8,17 @@ import logging
 import sys
 import time
 import signal
-import json
-import io
-import re
-import random
 import sqlite3
-from datetime import datetime
-from quart import Quart, jsonify, request
+from quart import Quart, jsonify
 import hypercorn.asyncio
 from hypercorn.config import Config
-from telethon import functions, types, events, TelegramClient, Button
-from telethon.tl.custom import Button as CustomButton
+from telethon import functions, types, TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.types import BotCommandScopeDefault, BotCommandScopePeer, InputUserEmpty
 from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION, MY_ID
-from brains.memory import search_memories
-from brains.calendar import get_upcoming_events, get_conflict_report
-import qrcode
-from brains.health import get_health_report_text, get_health_stats
-from brains.reminders import reminder_manager, start_reminder_loop, ReminderType
-from brains.emotions import get_emotion_state, set_emotion
-from brains.news import get_latest_news
-from brains.ai import ask_karina
-from brains.media import media_manager
+from brains.reminders import reminder_manager, start_reminder_loop
 from brains.vpn_logic import register_vpn_handlers, set_fire_and_forget
-from brains.alerts import notify_system_error
 from brains.subscription_monitor import start_sub_monitor_loop
-from auras import state, start_auras
+from auras import start_auras
 from skills import register_karina_base_skills
 from plugins import plugin_manager
 
@@ -124,7 +108,10 @@ async def health_check():
 # ========== ЛОГИКА ЗАПУСКА ==========
 
 async def run_bot_main(client):
-    await client.start(bot_token=KARINA_TOKEN)
+    if not client.is_connected():
+        await client.connect()
+    if not await client.is_user_authorized():
+        await client.start(bot_token=KARINA_TOKEN)
     logger.info("✅ Бот запущен")
     await report_status("bot", "running")
 
@@ -192,13 +179,14 @@ async def amain():
         loop.add_signal_handler(sig, lambda: SHUTDOWN_EVENT.set())
 
     # ========== ИНИЦИАЛИЗАЦИЯ КЛИЕНТОВ (С ЗАЩИТОЙ ОТ LOCK) ==========
-    bot_client = None
+    bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
     user_client = None
     
     for i in range(15): # Пытаемся 15 раз (30 секунд)
         try:
-            bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
-            # Проверка открытия файла
+            await bot_client.connect()
+            if not await bot_client.is_user_authorized():
+                await bot_client.start(bot_token=KARINA_TOKEN)
             break
         except sqlite3.OperationalError as e:
             if "locked" in str(e):
@@ -206,7 +194,7 @@ async def amain():
                 await asyncio.sleep(2)
             else: raise
     
-    if not bot_client:
+    if not bot_client.is_connected():
         logger.error("🔴 Не удалось открыть сессию бота. База данных заблокирована другим процессом.")
         return
 

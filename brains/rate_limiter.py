@@ -5,7 +5,7 @@ Rate Limiter для Karina AI API
 import time
 from collections import defaultdict
 from typing import Dict, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

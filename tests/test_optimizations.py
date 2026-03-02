@@ -9,7 +9,7 @@ import asyncio
 import time
 import sys
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 # Добавляем корень проекта в path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,7 +24,6 @@ class TestInMemoryCache:
     def cache_setup(self):
         """Фикстура для настройки кэша"""
         # Импортируем функции из main
-        from main import run_bot_main
         # Создаём тестовый кэш
         USER_CACHE = {}
         CACHE_TTL = 300

@@ -3,9 +3,8 @@ AI Tool Executor для Karina AI
 Выполнение инструментов (function calling) отдельно от основного запроса
 """
 import logging
-import json
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 import asyncio
 
 logger = logging.getLogger(__name__)

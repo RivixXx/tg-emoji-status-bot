@@ -2,7 +2,6 @@
 Tests for VPN API (Marzban Client) - JWT Authentication
 """
 import pytest
-import asyncio
 import sys
 import os
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -11,7 +10,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from brains.vpn_api import MarzbanClient, generate_vpn_key
-from brains.exceptions import VPNError, VPNUserExistsError, VPNAuthorizationError, VPNConnectionError
+from brains.exceptions import VPNError, VPNUserExistsError, VPNAuthorizationError
 
 
 class TestMarzbanClient:

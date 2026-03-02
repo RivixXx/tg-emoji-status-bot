@@ -1,27 +1,17 @@
-import os
 import asyncio
 import logging
-import re
-import random
 import time
 import io
 import qrcode
-from datetime import datetime, timedelta
-from telethon import events, Button, types, TelegramClient
-from brains.config import MY_ID, KARINA_TOKEN
+from telethon import events, Button, TelegramClient
+from brains.config import MY_ID
 from brains.media import media_manager
 from brains.payment import payment_manager
 from brains.alerts import notify_new_user, notify_sale, notify_trial, notify_system_error
 from brains.mcp_vpn_shop import (
     mcp_vpn_get_user,
     mcp_vpn_create_user,
-    mcp_vpn_update_user_state,
-    mcp_vpn_add_referral,
-    mcp_vpn_get_referral_stats,
-    mcp_vpn_create_order,
-    mcp_vpn_update_order,
-    mcp_vpn_update_balance,
-    calculate_referral_commission
+    mcp_vpn_update_user_state
 )
 from brains.vpn_ui import (
     BANNER_FILES,
@@ -31,20 +21,7 @@ from brains.vpn_ui import (
     get_tariffs_text,
     get_tariffs_keyboard,
     get_instructions_text,
-    get_instruction_platform_text,
     get_platform_keyboard,
-    get_referral_text,
-    get_referral_keyboard,
-    get_support_text,
-    get_support_keyboard,
-    get_support_write_keyboard,
-    get_faq_main_text,
-    get_faq_main_keyboard,
-    get_download_text,
-    get_download_keyboard,
-    get_balance_text,
-    get_balance_keyboard,
-    get_payment_keyboard,
     get_back_keyboard,
     get_payment_methods_keyboard,
     get_after_purchase_keyboard,

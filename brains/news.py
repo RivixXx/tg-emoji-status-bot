@@ -15,11 +15,9 @@ import httpx
 import logging
 import xml.etree.ElementTree as ET
 import asyncio
-import hashlib
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from brains.clients import supabase_client
-from brains.config import MISTRAL_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +136,7 @@ async def save_news_to_history(news_items: List[Dict], user_id: int = 0):
                 supabase_client.table("news_history")\
                     .upsert(record, on_conflict="link")\
                     .execute()
-            except Exception as e:
+            except Exception:
                 logger.debug(f"News already exists: {record['link']}")
         
         logger.info(f"💾 Сохранено {len(records)} новостей в историю")

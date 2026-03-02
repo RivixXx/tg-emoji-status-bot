@@ -11,7 +11,6 @@ https://github.com/snakers4/silero-models
 - Быстрый синтез (~1-2 сек на фразу)
 - Формат: OGG Vorbis (совместим с Telegram)
 """
-import io
 import logging
 import os
 import re
@@ -269,7 +268,6 @@ class KarinaTTS:
     
     def _to_wav_bytes(self, audio: 'np.ndarray', sample_rate: int = 48000) -> bytes:
         """Конвертирует numpy array в WAV bytes"""
-        import numpy as np
         from scipy.io.wavfile import write as write_wav
         import io
         

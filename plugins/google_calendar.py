@@ -3,8 +3,7 @@ Google Calendar Plugin for Karina AI
 Отключаемый модуль для работы с Google Calendar
 """
 import logging
-from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from plugins.base import Plugin, PluginConfig
 
 logger = logging.getLogger(__name__)
