@@ -7,7 +7,7 @@
 import httpx
 import logging
 from typing import Optional
-from supabase import create_client, Client, SupabaseException
+from supabase import create_client, Client
 
 from brains.config import SUPABASE_URL, SUPABASE_KEY, MISTRAL_API_KEY
 
