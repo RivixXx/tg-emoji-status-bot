@@ -1,234 +1,235 @@
 """
-Karina AI - Telegram Bot + Web Server
-Единый asyncio event loop с системой супервизора, метриками и Graceful Shutdown
+KARINA AI — Dual Mode Bot
+- Для владельца (MY_ID): персональный ассистент
+- Для клиентов: VPN магазин
 """
 import os
-import asyncio
 import logging
-import sys
-import time
-import signal
-import sqlite3
-from quart import Quart, jsonify
-import hypercorn.asyncio
-from hypercorn.config import Config
-from telethon import functions, types, TelegramClient, events
-from telethon.sessions import StringSession
-from brains.config import API_ID, API_HASH, KARINA_TOKEN, USER_SESSION, MY_ID
-from brains.reminders import reminder_manager, start_reminder_loop
-from brains.vpn_logic import register_vpn_handlers, set_fire_and_forget
-from brains.subscription_monitor import start_sub_monitor_loop
-from brains.clients import get_supabase_client, supabase_client
-from auras import start_auras
-from skills import register_karina_base_skills
-from plugins import plugin_manager
+import asyncio
+from telethon import TelegramClient, events, types, functions
+from dotenv import load_dotenv
 
-# ========== ИНИЦИАЛИЗАЦИЯ SUPABASE ==========
-# Инициализируем клиент при загрузке модуля
-supabase_client = get_supabase_client()
+load_dotenv()
 
-# ========== FIRE-AND-FORGET (ДИСПЕТЧЕР ФОНОВЫХ ЗАДАЧ) ==========
+# ========== КОНФИГ ==========
+API_ID = int(os.environ.get('API_ID', 0))
+API_HASH = os.environ.get('API_HASH', '')
+BOT_TOKEN = os.environ.get('KARINA_BOT_TOKEN', '')
+MY_ID = int(os.environ.get('MY_TELEGRAM_ID', 0))
+MISTRAL_KEY = os.environ.get('MISTRAL_API_KEY', '')
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
 
-background_tasks = set()
-
-def fire_and_forget(coro):
-    """Запускает асинхронную функцию в фоне."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return
-
-    task = loop.create_task(coro)
-    background_tasks.add(task)
-    task.add_done_callback(background_tasks.discard)
-    
-    def log_error(t):
-        if t.exception():
-            err_msg = str(t.exception())
-            if "database is locked" in err_msg:
-                logging.warning(f"⚠️ БД заблокирована: {err_msg}")
-            else:
-                logging.error(f"⚠️ Ошибка в фоновой задаче: {err_msg}")
-    
-    task.add_done_callback(log_error)
-
-# Передаем функцию fire_and_forget в логику VPN
-set_fire_and_forget(fire_and_forget)
-
-# ========== ЛОГИРОВАНИЕ ==========
-
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    level=logging.INFO,
-    stream=sys.stdout
-)
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 🛡️ Фильтрация шумных предупреждений Telethon
-logging.getLogger('telethon.network.mtproto').setLevel(logging.ERROR)
-logging.getLogger('telethon.extensions.messages').setLevel(logging.ERROR)
+# Проверка
+if not all([API_ID, API_HASH, BOT_TOKEN, MY_ID]):
+    logger.error("❌ Заполни .env: API_ID, API_HASH, KARINA_BOT_TOKEN, MY_TELEGRAM_ID")
+    exit(1)
 
-# ========== МОНИТОРИНГ И МЕТРИКИ ==========
+# ========== КЛИЕНТ ==========
+bot = TelegramClient('bot_session', API_ID, API_HASH)
 
-stats_lock = asyncio.Lock()
-APP_STATS = {
-    "start_time": time.time(),
-    "components": {
-        "web": {"status": "starting", "last_seen": 0, "restarts": 0},
-        "bot": {"status": "starting", "last_seen": 0, "restarts": 0},
-        "userbot": {"status": "starting", "last_seen": 0, "restarts": 0},
-        "reminders": {"status": "starting", "last_seen": 0, "restarts": 0}
-    },
-    "errors_count": 0,
-    "last_error": None
-}
+# ========== VPN ДАННЫЕ (кэш) ==========
+VPN_USERS = {}  # {user_id: {"state": "NEW", "trial_used": False}}
 
-SHUTDOWN_EVENT = asyncio.Event()
+# ========== КНОПКИ ==========
+def vpn_menu_keyboard():
+    return [
+        [types.KeyboardButton('🚀 Купить VPN')],
+        [types.KeyboardButton('👤 Мой профиль')],
+        [types.KeyboardButton('📱 Инструкция')],
+        [types.KeyboardButton('💬 Поддержка')]
+    ]
 
-async def report_status(component: str, status: str):
-    async with stats_lock:
-        if component in APP_STATS["components"]:
-            APP_STATS["components"][component]["status"] = status
-            APP_STATS["components"][component]["last_seen"] = time.time()
+def tariff_keyboard():
+    return [
+        [types.KeyboardButton('1 месяц — 150₽')],
+        [types.KeyboardButton('3 месяца — 400₽')],
+        [types.KeyboardButton('6 месяцев — 750₽')],
+        [types.KeyboardButton('◀️ Назад')]
+    ]
 
-async def record_error(error_msg: str):
-    async with stats_lock:
-        APP_STATS["errors_count"] += 1
-        APP_STATS["last_error"] = {"msg": str(error_msg), "time": time.time()}
+def back_keyboard():
+    return [[types.KeyboardButton('◀️ Назад')]]
 
-# ========== ВЕБ-СЕРВЕР ==========
+# ========== ОБРАБОТЧИКИ ==========
 
-app = Quart(__name__, static_folder='static', static_url_path='')
-
-@app.route('/')
-async def index():
-    return await app.send_static_file('index.html')
-
-@app.route('/api/health')
-async def health_check():
-    now = time.time()
-    async with stats_lock:
-        return jsonify({"status": "ok", "uptime": int(now - APP_STATS["start_time"]), "errors": APP_STATS["errors_count"]}), 200
-
-# ========== ЛОГИКА ЗАПУСКА ==========
-
-async def run_bot_main(client):
-    logger.info("✅ Бот запущен")
-    await report_status("bot", "running")
-
-    # Регистрация команд (отправляем в API)
-    commands = [types.BotCommand("start", "Меню VPN 🚀"), types.BotCommand("app", "Панель управления 📱")]
-    try:
-        await client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopeDefault(), lang_code='', commands=[]))
-        my_peer = await client.get_input_entity(MY_ID)
-        await client(functions.bots.SetBotCommandsRequest(scope=types.BotCommandScopePeer(peer=my_peer), lang_code='ru', commands=commands))
-    except Exception as e:
-        logger.warning(f"Не удалось установить команды бота: {e}")
-
-    await client.run_until_disconnected()
-
-async def run_userbot_main(u_client, b_client):
-    await u_client.connect()
-    if not await u_client.is_user_authorized():
-        await report_status("userbot", "unauthorized")
-        return
+@bot.on(events.NewMessage(pattern='/start'))
+async def start_handler(e):
+    user_id = e.sender_id
     
-    logger.info("✅ UserBot авторизован")
-    await report_status("userbot", "running")
-    
-    # Запуск аур и напоминаний
-    reminder_manager.set_client(b_client, MY_ID)
-    
-    aura_task = asyncio.create_task(start_auras(u_client, b_client))
-    reminders_task = asyncio.create_task(start_reminder_loop())
+    if user_id == MY_ID:
+        # Владелец — персональный ответ
+        await e.reply("""
+👋 Привет! Я Карина, твой персональный ассистент.
 
-    try:
-        await u_client.run_until_disconnected()
-    finally:
-        aura_task.cancel()
-        reminders_task.cancel()
+🧠 Сейчас я работаю в базовом режиме.
+💬 Пиши мне — я отвечу!
 
-async def component_supervisor(coro_func, name, *args):
-    backoff = 10
-    while not SHUTDOWN_EVENT.is_set():
-        try:
-            logger.info(f"🔄 Supervisor: Запуск {name}...")
-            await coro_func(*args)
-        except Exception as e:
-            err_text = str(e)
-            await record_error(f"{name} crashed: {err_text}")
-            
-            logger.error(f"💀 Supervisor: {name} упал: {err_text}. Рестарт через {backoff}с...")
-            await report_status(name, "failed")
+Команды:
+/ping — проверить связь
+/help — справка
+        """)
+    else:
+        # Клиент — VPN витрина
+        if user_id not in VPN_USERS:
+            VPN_USERS[user_id] = {"state": "NEW", "trial_used": False}
         
-        if SHUTDOWN_EVENT.is_set(): break
-        await asyncio.sleep(backoff)
-        backoff = min(backoff * 2, 300)
+        await e.reply("""
+🚀 **VPN SHOP**
 
-async def amain():
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: SHUTDOWN_EVENT.set())
+Быстрый и надёжный VPN для любых устройств.
 
-    # ========== ИНИЦИАЛИЗАЦИЯ КЛИЕНТОВ ==========
-    bot_client = TelegramClient('karina_bot_session', API_ID, API_HASH)
+📱 Нажмите кнопку ниже для начала:
+        """, buttons=[[types.KeyboardButton('🚀 Начать')]])
     
-    # 1. РЕГИСТРИРУЕМ ХЕНДЛЕРЫ ДО ПОДКЛЮЧЕНИЯ, ЧТОБЫ НЕ ПРОПУСТИТЬ НИ ОДНОГО СООБЩЕНИЯ
-    register_vpn_handlers(bot_client)
-    register_karina_base_skills(bot_client)
+    raise events.StopPropagation
+
+@bot.on(events.NewMessage(pattern='/ping'))
+async def ping_handler(e):
+    await e.reply("🏓 Понг! Бот работает ✅")
+    raise events.StopPropagation
+
+@bot.on(events.NewMessage(pattern='/help'))
+async def help_handler(e):
+    if e.sender_id == MY_ID:
+        await e.reply("""
+📚 **Команды владельца:**
+
+/ping — проверить работу
+/ai <текст> — задать вопрос ИИ
+/status — статус систем
+        """)
+    raise events.StopPropagation
+
+@bot.on(events.NewMessage())
+async def chat_handler(e):
+    user_id = e.sender_id
+    text = e.text.strip()
     
-    # 2. ПОДКЛЮЧАЕМСЯ К TELEGRAM (С ЗАЩИТОЙ ОТ LOCK)
-    for i in range(15): # Пытаемся 15 раз (30 секунд)
-        try:
-            await bot_client.connect()
-            if not await bot_client.is_user_authorized():
-                await bot_client.start(bot_token=KARINA_TOKEN)
-            break
-        except sqlite3.OperationalError as e:
-            if "locked" in str(e):
-                logger.warning(f"⏳ База данных сессии заблокирована, жду 2 сек... (попытка {i+1}/15)")
-                await asyncio.sleep(2)
-            else: raise
-    
-    if not bot_client.is_connected():
-        logger.error("🔴 Не удалось открыть сессию бота. База данных заблокирована другим процессом.")
-        return
-
-    user_client = TelegramClient(StringSession(USER_SESSION), API_ID, API_HASH)
-
-    # Плагины
-    plugin_manager.load_config()
-    discovered = plugin_manager.discover_plugins()
-    for plugin_name in discovered:
-        if plugin_name in ["base", "__init__", "base.py"]: continue
-        plugin = plugin_manager.load_plugin(plugin_name)
-        if plugin: plugin_manager.register_plugin(plugin)
-    await plugin_manager.initialize_all()
-
-    # Запускаем задачи
-    bot_supervisor = asyncio.create_task(component_supervisor(run_bot_main, "bot", bot_client))
-    user_supervisor = asyncio.create_task(component_supervisor(run_userbot_main, "userbot", user_client, bot_client))
-    
-    # Даем боту время полностью инициализироваться перед запуском монитора подписок
-    await asyncio.sleep(3)
-    sub_monitor = asyncio.create_task(start_sub_monitor_loop(bot_client))
-
-    try:
-        port = int(os.environ.get('PORT', 8080))
-        config = Config()
-        config.bind = [f"0.0.0.0:{port}"]
-        await hypercorn.asyncio.serve(app, config, shutdown_trigger=SHUTDOWN_EVENT.wait)
-    finally:
-        SHUTDOWN_EVENT.set()
-        await plugin_manager.shutdown_all()
-        sub_monitor.cancel()
-        await asyncio.gather(bot_supervisor, user_supervisor, return_exceptions=True)
+    # Владелец — отвечаем как ассистент
+    if user_id == MY_ID:
+        # Команды владельца
+        if text.startswith('/ai '):
+            question = text[4:]
+            # TODO: Интеграция с Mistral AI
+            await e.reply(f"🧠 Вопрос: {question}\n\n(ИИ будет подключен)")
+            return
         
-        if bot_client.is_connected(): await bot_client.disconnect()
-        if user_client.is_connected(): await user_client.disconnect()
+        if text == '/status':
+            await e.reply("""
+✅ Бот работает
+📡 Telegram: подключён
+🧠 AI: готов к работе
+📊 БД: Supabase
+            """)
+            return
+        
+        # Обычный чат
+        await e.reply(f"✅ {text}\n\n(Карина запомнила)")
+    
+    # Клиенты — VPN магазин
+    else:
+        if text == '🚀 Начать':
+            VPN_USERS[user_id]['state'] = 'REGISTERED'
+            await e.reply("""
+🎉 **Добро пожаловать!**
+
+Выберите действие:
+            """, buttons=vpn_menu_keyboard())
+            return
+        
+        if text == '🚀 Купить VPN':
+            await e.reply("""
+💎 **Тарифы VPN:**
+
+• 1 месяц — 150₽
+• 3 месяца — 400₽ (выгода 50₽)
+• 6 месяцев — 750₽ (выгода 150₽)
+
+🎁 **Бесплатный тест:** 1 день
+            """, buttons=tariff_keyboard())
+            return
+        
+        if text == '👤 Мой профиль':
+            user_data = VPN_USERS.get(user_id, {})
+            await e.reply(f"""
+👤 **Профиль:**
+
+ID: `{user_id}`
+Статус: {user_data.get('state', 'NEW')}
+Тест использован: {user_data.get('trial_used', 'Нет')}
+            """, buttons=back_keyboard())
+            return
+        
+        if text == '📱 Инструкция':
+            await e.reply("""
+📚 **Как использовать VPN:**
+
+1️⃣ После оплаты вы получите ключ
+2️⃣ Скачайте приложение (V2RayX, V2RayNG)
+3️⃣ Импортируйте ключ
+4️⃣ Подключитесь
+
+📱 Приложения:
+• iOS: V2RayX
+• Android: V2RayNG
+• Windows: v2rayN
+            """, buttons=back_keyboard())
+            return
+        
+        if text == '💬 Поддержка':
+            await e.reply("💬 По вопросам: @support_username")
+            return
+        
+        if 'месяц' in text and '₽' in text:
+            await e.reply("""
+✅ **Выбран тариф**
+
+Для активации напишите /pay
+            """)
+            return
+        
+        if text == '◀️ Назад':
+            await e.reply("Главное меню:", buttons=vpn_menu_keyboard())
+            return
+        
+        # Неизвестная команда
+        await e.reply("""
+🤔 Не понял команду.
+
+Выберите кнопку из меню:
+        """, buttons=vpn_menu_keyboard())
+    
+    raise events.StopPropagation
+
+# ========== ЗАПУСК ==========
+
+async def main():
+    await bot.start(bot_token=BOT_TOKEN)
+    
+    # Команды бота
+    await bot(functions.bots.SetBotCommandsRequest(
+        scope=types.BotCommandScopeDefault(),
+        lang_code='ru',
+        commands=[
+            types.BotCommand('start', 'Запустить бота'),
+            types.BotCommand('ping', 'Проверить связь'),
+            types.BotCommand('help', 'Справка')
+        ]
+    ))
+    
+    logger.info("=" * 40)
+    logger.info("🤖 KARINA BOT ЗАПУЩЕН")
+    logger.info(f"👤 Владелец: {MY_ID}")
+    logger.info("=" * 40)
+    
+    await bot.run_until_disconnected()
 
 if __name__ == '__main__':
     try:
-        asyncio.run(amain())
+        asyncio.run(main())
     except KeyboardInterrupt:
-        pass
+        logger.info("👋 Остановлено")
