@@ -41,7 +41,7 @@ async def update_emoji_aura(user_client):
     hour, minute, weekday = now.hour, now.minute, now.weekday()
     time_min = hour * 60 + minute
     
-    # Логика определения состояния (упрощена для наглядности)
+    # Логика определения состояния
     if weekday < 5:
         if time_min < 420: current = 'sleep'
         elif time_min < 1020: current = 'work'
@@ -54,16 +54,19 @@ async def update_emoji_aura(user_client):
         emoji_id = EMOJI_MAP.get(current)
         try:
             logger.info(f"🔄 Попытка смены эмодзи-статуса на {current} (ID: {emoji_id})")
-            await user_client(functions.account.UpdateEmojiStatusRequest(
-                emoji_status=types.EmojiStatus(document_id=emoji_id) if emoji_id else types.EmojiStatusEmpty()
-            ))
+            # Добавляем таймаут, чтобы не вешать цикл
+            await asyncio.wait_for(
+                user_client(functions.account.UpdateEmojiStatusRequest(
+                    emoji_status=types.EmojiStatus(document_id=emoji_id) if emoji_id else types.EmojiStatusEmpty()
+                )),
+                timeout=15
+            )
             logger.info(f"✨ Аура: статус изменен на {current}")
+            state.current_emoji_state = current
+        except asyncio.TimeoutError:
+            logger.warning(f"⏳ Тайм-аут при смене статуса на {current}. Telegram не отвечает.")
         except Exception as e:
             logger.error(f"❌ Ошибка смены статуса ({current}): {e}")
-        finally:
-            # Помечаем состояние как установленное (даже если была ошибка), 
-            # чтобы не спамить попытками каждую минуту
-            state.current_emoji_state = current
 
 async def update_bio_aura(user_client):
     """Динамическое БИО в рабочее время"""
@@ -76,14 +79,20 @@ async def update_bio_aura(user_client):
     if now.weekday() < 5 and 9 <= now.hour < 18:
         if state.last_bio_date != today:
             logger.info("🎨 Аура: Генерация нового БИО...")
-            new_bio = await generate_aura_phrase("bio")
-            if not new_bio:
-                new_bio = random.choice(BIO_PHRASES)
-            
             try:
-                await user_client(functions.account.UpdateProfileRequest(about=new_bio))
+                # Генерация фразы через ИИ тоже с таймаутом
+                new_bio = await asyncio.wait_for(generate_aura_phrase("bio"), timeout=20)
+                if not new_bio:
+                    new_bio = random.choice(BIO_PHRASES)
+                
+                await asyncio.wait_for(
+                    user_client(functions.account.UpdateProfileRequest(about=new_bio)),
+                    timeout=15
+                )
                 state.last_bio_date = today
                 logger.info(f"✅ Аура: БИО обновлено: {new_bio}")
+            except asyncio.TimeoutError:
+                logger.warning("⏳ Тайм-аут при обновлении БИО")
             except Exception as e:
                 logger.error(f"❌ Ошибка обновления БИО: {e}")
 
@@ -98,26 +107,18 @@ async def check_birthdays_task(karina_client):
 
     if now.hour == 8 and now.minute == 15:
         logger.info("🎂 Проверка дней рождения сотрудников...")
-        celebrants = await get_todays_birthdays()
-
-        for emp in celebrants:
-            logger.info(f"🥳 Сегодня день рождения у {emp['full_name']}!")
-
-            # 1. Генерируем поздравление через AI
-            prompt = f"Напиши теплое, оригинальное корпоративное поздравление для сотрудника по имени {emp['full_name']}. Учти его качества: {emp['characteristics']}. Стиль: дружелюбная Карина AI."
-            greeting_text = await ask_karina(prompt)
-
-            # 2. Генерируем открытку (пока логируем)
-            await generate_birthday_card(emp)
-
-            # 3. Отправляем в группу (здесь нужен ID вашей группы)
-            GROUP_ID = os.environ.get('TEAM_GROUP_ID')
-            if GROUP_ID:
-                try:
+        try:
+            celebrants = await get_todays_birthdays()
+            for emp in celebrants:
+                logger.info(f"🥳 Сегодня день рождения у {emp['full_name']}!")
+                prompt = f"Напиши поздравление для {emp['full_name']}. Учти: {emp['characteristics']}. Стиль: Карина AI."
+                greeting_text = await asyncio.wait_for(ask_karina(prompt), timeout=30)
+                
+                GROUP_ID = os.environ.get('TEAM_GROUP_ID')
+                if GROUP_ID and greeting_text:
                     await karina_client.send_message(int(GROUP_ID), f"🥳 **С ДНЁМ РОЖДЕНИЯ!** 🎂\n\n{greeting_text}")
-                    logger.info(f"✅ Поздравление для {emp['full_name']} отправлено в группу.")
-                except Exception as e:
-                    logger.error(f"❌ Ошибка отправки поздравления: {e}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка в задаче дней рождения: {e}")
 
 
 async def check_calendar_reminders_task(karina_client):
@@ -135,134 +136,78 @@ async def check_calendar_reminders_task(karina_client):
         from brains.calendar import get_today_calendar_events
         
         # Получаем события на сегодня
-        events = await get_today_calendar_events()
-        
-        if not events:
-            logger.info("📅 На сегодня событий нет")
-            return
-        
-        created_count = 0
-        
-        for event in events:
-            event_time = event['start']
-            reminder_time = event_time - timedelta(minutes=15)
+        try:
+            events = await asyncio.wait_for(get_today_calendar_events(), timeout=30)
             
-            # Пропускаем если время напоминания уже прошло
-            if reminder_time <= now:
-                logger.debug(f"⏭️ Пропущено событие '{event['summary']}' — время напоминания прошло")
-                continue
+            if not events:
+                logger.info("📅 На сегодня событий нет")
+                return
             
-            reminder_id = f"meeting_{int(event_time.timestamp())}"
+            created_count = 0
+            for event in events:
+                event_time = event['start']
+                reminder_time = event_time - timedelta(minutes=15)
+                
+                if reminder_time <= now: continue
+                
+                reminder_id = f"meeting_{int(event_time.timestamp())}"
+                if reminder_id in reminder_manager.reminders: continue
+                
+                reminder = Reminder(
+                    id=reminder_id,
+                    type=ReminderType.MEETING,
+                    message=f"Встреча: {event['summary']}",
+                    scheduled_time=reminder_time,
+                    escalate_after=[5, 10],
+                    context={
+                        "title": event['summary'],
+                        "minutes": 15,
+                        "source": "auto_morning_check",
+                        "event_start": event_time.isoformat(),
+                        "calendar": event.get('calendar', '')
+                    }
+                )
+                
+                await reminder_manager.add_reminder(reminder)
+                created_count += 1
+                logger.info(f"🔔 Создано напоминание: {event['summary']} на {reminder_time.strftime('%H:%M')}")
             
-            # Проверяем, нет ли уже такого напоминания
-            if reminder_id in reminder_manager.reminders:
-                logger.debug(f"⚠️ Напоминание для '{event['summary']}' уже существует")
-                continue
-            
-            # Создаём напоминание
-            reminder = Reminder(
-                id=reminder_id,
-                type=ReminderType.MEETING,
-                message=f"Встреча: {event['summary']}",
-                scheduled_time=reminder_time,
-                escalate_after=[5, 10],  # Короткая эскалация для встреч
-                context={
-                    "title": event['summary'],
-                    "minutes": 15,
-                    "source": "auto_morning_check",
-                    "event_start": event_time.isoformat(),
-                    "calendar": event.get('calendar', '')
-                }
-            )
-            
-            await reminder_manager.add_reminder(reminder)
-            created_count += 1
-            logger.info(f"🔔 Создано напоминание: {event['summary']} на {reminder_time.strftime('%H:%M')}")
-        
-        logger.info(f"✅ Проверка завершена. Создано напоминаний: {created_count}")
+            logger.info(f"✅ Проверка завершена. Создано напоминаний: {created_count}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка проверки календаря: {e}")
 
 
 async def check_overwork_task(karina_client, user_id: int):
     """
     Вечерняя проверка на переработки (21:00)
-    Если пользователь работал больше нормы — Карина напомнит об отдыхе
     """
     moscow_tz = timezone(timedelta(hours=3))
     now = datetime.now(moscow_tz)
 
-    # Проверяем в 21:00
     if now.hour == 21 and now.minute == 0:
         from brains.productivity import check_overwork_alert, get_overwork_days
-
-        # Проверяем текущую переработку
-        alert = await check_overwork_alert(user_id)
-
-        if alert:
-            # Отправляем предупреждение
-            try:
-                await karina_client.send_message(
-                    user_id,
-                    f"😟 **Карина беспокоится...**\n\n{alert}\n\nПожалуйста, позаботься об отдыхе! 💙",
-                    parse_mode='markdown'
-                )
-                logger.info("⚠️ Отправлено предупреждение о переработке")
-            except Exception as e:
-                logger.error(f"Ошибка отправки предупреждения: {e}")
-
-        # Также проверяем работу в выходные
-        if now.weekday() >= 5:  # Сб или Вс
-            overwork_days = await get_overwork_days(user_id, days=1)
-            if overwork_days:
-                try:
-                    await karina_client.send_message(
-                        user_id,
-                        "🌿 **Выходной день...**\n\n"
-                        "Я вижу, ты сегодня работал. Не забывай, что отдых тоже важен для продуктивности! "
-                        "Может стоит закончить пораньше? 😊",
-                        parse_mode='markdown'
-                    )
-                    logger.info("⚠️ Отправлено предупреждение о работе в выходной")
-                except Exception as e:
-                    logger.error(f"Ошибка отправки предупреждения: {e}")
+        try:
+            alert = await asyncio.wait_for(check_overwork_alert(user_id), timeout=20)
+            if alert:
+                await karina_client.send_message(user_id, f"😟 **Карина беспокоится...**\n\n{alert}\n\nПожалуйста, позаботься об отдыхе! 💙")
+        except Exception as e:
+            logger.error(f"❌ Ошибка проверки переработок: {e}")
 
 
 async def start_auras(user_client, karina_client):
-    """Главный цикл фоновых задач"""
-    reconnect_attempts = 0
-    max_reconnect_attempts = 5
-
+    """Главный цикл фоновых задач (безопасный)"""
     while True:
         try:
-            await update_emoji_aura(user_client)
-            await update_bio_aura(user_client)
-            await check_birthdays_task(karina_client)
-            await check_calendar_reminders_task(karina_client)
-            await check_overwork_task(karina_client, MY_ID)
-
-            reconnect_attempts = 0  # Сброс счётчика ошибок при успешной итерации
-
-        except PersistentTimestampOutdatedError:
-            logger.warning(f"⚠️ Telegram: рассинхронизация timestamp (попытка {reconnect_attempts + 1}/{max_reconnect_attempts})")
-            reconnect_attempts += 1
-
-            if reconnect_attempts >= max_reconnect_attempts:
-                logger.error("❌ Превышено количество попыток переподключения. Требуется рестарт.")
-                await asyncio.sleep(300)
-                reconnect_attempts = 0
-            else:
-                try:
-                    logger.info("🔄 Переподключение к Telegram...")
-                    if user_client.is_connected():
-                        await user_client.disconnect()
-                    await asyncio.sleep(5)
-                    await user_client.connect()
-                    logger.info("✅ Переподключение успешно.")
-                except Exception as reconnect_err:
-                    logger.error(f"❌ Ошибка переподключения: {reconnect_err}")
-                    await asyncio.sleep(30)
-
+            # Запускаем задачи параллельно, чтобы они не ждали друг друга
+            await asyncio.gather(
+                update_emoji_aura(user_client),
+                update_bio_aura(user_client),
+                check_birthdays_task(karina_client),
+                check_calendar_reminders_task(karina_client),
+                check_overwork_task(karina_client, MY_ID),
+                return_exceptions=True
+            )
         except Exception as e:
-            logger.error(f" Ошибка в цикле Аур: {e}")
-            await asyncio.sleep(60)
-
+            logger.error(f"⚠️ Критическая ошибка в главном цикле аур: {e}")
+        
         await asyncio.sleep(60)

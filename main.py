@@ -141,7 +141,6 @@ async def run_userbot_main(u_client, b_client):
     
     # Запуск аур и напоминаний
     reminder_manager.set_client(b_client, MY_ID)
-    await reminder_manager.load_active_reminders()
     
     aura_task = asyncio.create_task(start_auras(u_client, b_client))
     reminders_task = asyncio.create_task(start_reminder_loop())
