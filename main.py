@@ -4,6 +4,7 @@ KARINA AI — Главный файл запуска
 """
 import os
 import logging
+import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,4 +22,4 @@ from vpn_shop import main
 
 if __name__ == '__main__':
     logging.info("🚀 KARINA VPN SHOP — ЗАПУСК")
-    main()
+    asyncio.run(main())
