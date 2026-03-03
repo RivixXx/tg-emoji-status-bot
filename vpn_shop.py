@@ -839,7 +839,7 @@ async def main():
             logger.info(f"📊 МЕТРИКИ: {METRICS}")
     
     asyncio.create_task(print_metrics())
-    
+
     await bot.run_until_disconnected()
 
 if __name__ == '__main__':
@@ -847,5 +847,3 @@ if __name__ == '__main__':
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("👋 Остановлено")
-    finally:
-        await http.aclose()
