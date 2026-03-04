@@ -274,7 +274,7 @@ async def start_handler(event):
     if user_id not in VPN_USERS:
         VPN_USERS[user_id] = {"state": "NEW", "trial_used": False, "balance": 0, "keys": [], "joined": datetime.now()}
     
-    await send_banner(event, "menu", text_welcome(user_id), inline_main_menu(False), user_id)
+    await send_banner(event, "menu", text_welcome(user_id), inline_main_menu(), user_id)
     log_timing("Обработка /start", start_time)
 
 @bot.on(events.CallbackQuery)
@@ -297,7 +297,7 @@ async def callback_handler(event):
     
     # Навигация
     if data == "main_menu":
-        await send_banner(event, "menu", text_welcome(user_id), inline_main_menu(False), user_id)
+        await send_banner(event, "menu", text_welcome(user_id), inline_main_menu(), user_id)
     
     elif data == "profile_menu":
         await send_banner(event, "profile", text_profile(user_id, user), inline_profile(len(user.get("keys", [])) > 0), user_id)

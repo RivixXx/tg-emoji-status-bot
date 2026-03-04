@@ -58,8 +58,8 @@ def get_supabase_client() -> Optional[Client]:
         return None
 
 
-# Для обратной совместимости — просто переменная
-supabase_client = None
+# Для обратной совместимости
+supabase_client = get_supabase_client()
 
 
 # ============================================================================
