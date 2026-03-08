@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Глобальный клиент для переиспользования соединений
 # Настроен с правильными таймаутами и retry
 http_client = httpx.AsyncClient(
-    timeout=httpx.Timeout(30.0, connect=10.0, read=20.0, write=10.0),
+    timeout=httpx.Timeout(30.0, connect=10.0, read=60.0, write=10.0),
     limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
     follow_redirects=True
 )

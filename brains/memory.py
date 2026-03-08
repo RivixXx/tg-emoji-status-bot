@@ -96,7 +96,10 @@ async def search_memories(query: str, limit: int = 5, threshold: float = 0.7, us
         else:
             logger.warning(f"Supabase RPC returned no data: {response}")
             return ""
-            
+
+    except asyncio.TimeoutError:
+        logger.warning("⏱️ Память: Таймаут запроса к Supabase (>60с)")
+        return ""
     except Exception as e:
         logger.error(f"Search memory failed with error: {type(e).__name__}: {str(e)}")
         return ""
