@@ -37,6 +37,7 @@ if os.path.exists(CACHE_FILE):
             FILE_ID_CACHE = json.load(f)
     except Exception as e:
         logger.error(f"Ошибка чтения кэша с диска: {e}")
+        FILE_ID_CACHE = {}
 
 BANNER_PATHS = {
     "menu": "banners/menu.jpg",
@@ -80,9 +81,21 @@ async def preload_banners(bot: TelegramClient, my_id: int):
                 logger.info(f"⏳ ЗАГРУЖАЮ '{banner_name}' ОДИН РАЗ НАВСЕГДА (займет ~45 сек)...")
                 try:
                     msg = await bot.send_file(my_id, file=file_path)
-                    # Сохраняем media объект (совместимо с Telethon 1.36+)
-                    FILE_ID_CACHE[banner_name] = msg.media
-                    uploaded_paths[file_path] = msg.media
+                    # Сохраняем только file_id и access_hash (JSON-сериализуемо)
+                    if msg.media and hasattr(msg.media, 'photo'):
+                        photo = msg.media.photo
+                        file_id = photo.id
+                        access_hash = photo.access_hash
+                        file_reference = photo.file_reference or b''
+                        FILE_ID_CACHE[banner_name] = {
+                            'id': file_id,
+                            'access_hash': access_hash,
+                            'file_reference': file_reference.hex() if file_reference else ''
+                        }
+                    else:
+                        # Fallback: сохраняем как есть (для старых версий Telethon)
+                        FILE_ID_CACHE[banner_name] = msg.media
+                    uploaded_paths[file_path] = FILE_ID_CACHE[banner_name]
                     changed = True
                     logger.info(f"✅ Баннер '{banner_name}' успешно загружен!")
                 except Exception as e:
@@ -91,41 +104,33 @@ async def preload_banners(bot: TelegramClient, my_id: int):
                 logger.warning(f"⚠️ Файл для баннера не найден: {file_path}")
 
     if changed:
-        import base64
-        import pickle
-        # Кодируем media объекты в base64 для JSON сериализации
-        encoded_cache = {}
-        for name, media in FILE_ID_CACHE.items():
-            if media:
-                encoded_cache[name] = base64.b64encode(pickle.dumps(media)).decode('utf-8')
-        
         with open(CACHE_FILE, "w") as f:
-            json.dump(encoded_cache, f)
+            json.dump(FILE_ID_CACHE, f)
         logger.info("💾 Кэш баннеров сохранен в banners_cache.json! Больше загрузок не будет.")
     else:
         logger.info("⚡ Все баннеры найдены на диске! Загрузка мгновенная.")
 
 
 async def get_cached_banner(bot: TelegramClient, banner_name: str, my_id: int):
-    # Мгновенно отдаем сохраненный media объект из памяти
-    media = FILE_ID_CACHE.get(banner_name)
-    if media:
-        return media
+    from telethon.tl.types import InputPhoto
     
-    # Пытаемся загрузить из файла если есть encoded версия
-    if os.path.exists(CACHE_FILE):
-        try:
-            import base64
-            import pickle
-            with open(CACHE_FILE, "r") as f:
-                encoded_cache = json.load(f)
-            if banner_name in encoded_cache:
-                media = pickle.loads(base64.b64decode(encoded_cache[banner_name]))
-                FILE_ID_CACHE[banner_name] = media
-                return media
-        except Exception as e:
-            logger.error(f"Ошибка чтения кэша: {e}")
-    
+    # Мгновенно отдаем сохраненный объект из памяти
+    cached = FILE_ID_CACHE.get(banner_name)
+    if cached:
+        # Если это dict с id/access_hash — восстанавливаем InputPhoto
+        if isinstance(cached, dict) and 'id' in cached and 'access_hash' in cached:
+            try:
+                file_ref = bytes.fromhex(cached['file_reference']) if cached.get('file_reference') else b''
+                return InputPhoto(
+                    id=cached['id'],
+                    access_hash=cached['access_hash'],
+                    file_reference=file_ref
+                )
+            except Exception as e:
+                logger.error(f"Ошибка восстановления InputPhoto: {e}")
+                return None
+        # Если это старый media объект (не dict) — отдаем как есть
+        return cached
     return None
 
 
