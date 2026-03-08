@@ -72,6 +72,32 @@ async def get_cached_banner(bot: TelegramClient, banner_name: str, my_id: int):
         return None
 
 
+async def preload_banners(bot: TelegramClient, my_id: int):
+    """
+    Загружает все баннеры на серверы Telegram при старте бота,
+    чтобы клиентам не приходилось ждать.
+    """
+    logger.info("🖼 Начинаю предзагрузку баннеров на сервер Telegram...")
+    
+    for banner_name, file_path in BANNER_PATHS.items():
+        if banner_name not in CACHED_BANNERS:
+            if os.path.exists(file_path):
+                try:
+                    start = time.time()
+                    logger.info(f"⏳ Загружаю баннер '{banner_name}'...")
+                    # Отправляем фото вам в ЛС (my_id), чтобы получить media объект
+                    msg = await bot.send_file(my_id, file=file_path)
+                    CACHED_BANNERS[banner_name] = msg.media
+                    elapsed = time.time() - start
+                    logger.info(f"✅ Баннер '{banner_name}' успешно закэширован за {elapsed:.2f}с")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка предзагрузки баннера '{banner_name}': {e}")
+            else:
+                logger.warning(f"⚠️ Файл для баннера '{banner_name}' не найден по пути: {file_path}")
+                
+    logger.info("🎉 Все баннеры готовы к работе!")
+
+
 async def send_banner(bot, event, banner_name: str, caption: str, buttons, user_id, my_id: int):
     banner_media = await get_cached_banner(bot, banner_name, my_id)
     try:

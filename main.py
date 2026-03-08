@@ -52,7 +52,7 @@ from brains.news import get_latest_news
 from brains.employees import get_todays_birthdays, get_upcoming_birthdays
 
 # VPN магазин
-from brains.vpn_logic import register_vpn_handlers
+from brains.vpn_logic import register_vpn_handlers, preload_banners
 
 # ========== ГЛОБАЛЬНЫЕ СОСТОЯНИЯ ==========
 SHUTDOWN_EVENT = asyncio.Event()
@@ -110,6 +110,10 @@ async def main():
     global bot
     bot = TelegramClient('bot_session', API_ID, API_HASH)
     await bot.start(bot_token=BOT_TOKEN)
+
+    # ---> ПРЕДЗАГРУЗКА БАННЕРОВ <---
+    # Бот загрузит все картинки до того, как начнет отвечать пользователям
+    await preload_banners(bot, MY_ID)
 
     # 1. ПОДКЛЮЧАЕМ ЛОГИКУ МАГАЗИНА
     register_vpn_handlers(bot, MY_ID)
