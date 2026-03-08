@@ -35,6 +35,9 @@ karina/
 # Banner cache
 banners_cache.json
 
+# Telegram sessions
+*.session
+
 # Temporary files
 temp/
 *.log
