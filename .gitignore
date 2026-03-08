@@ -32,6 +32,9 @@ karina/
 # Environment variables
 .env
 
+# Banner cache
+banners_cache.json
+
 # Temporary files
 temp/
 *.log

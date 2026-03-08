@@ -4,6 +4,7 @@ VPN Shop Logic — Обработчики событий VPN-магазина
 import os
 import io
 import time
+import json
 import logging
 import asyncio
 import qrcode
@@ -25,8 +26,18 @@ MARZBAN_URL = os.environ.get('MARZBAN_URL', 'http://127.0.0.1:8000')
 MARZBAN_USER = os.environ.get('MARZBAN_USER', 'admin')
 MARZBAN_PASS = os.environ.get('MARZBAN_PASS', '')
 
-# ========== КЭШ БАННЕРОВ ==========
-CACHED_BANNERS = {}
+# ========== КЭШ БАННЕРОВ (СОХРАНЕНИЕ НА ДИСК) ==========
+CACHE_FILE = "banners_cache.json"
+FILE_ID_CACHE = {}
+
+# Пытаемся прочитать сохраненные ID при запуске
+if os.path.exists(CACHE_FILE):
+    try:
+        with open(CACHE_FILE, "r") as f:
+            FILE_ID_CACHE = json.load(f)
+    except Exception as e:
+        logger.error(f"Ошибка чтения кэша с диска: {e}")
+
 BANNER_PATHS = {
     "menu": "banners/menu.jpg",
     "support": "banners/support.jpg",
@@ -49,66 +60,59 @@ def log_timing(step_name: str, start_time: float):
 
 
 # ========== БАННЕРЫ ==========
-async def get_cached_banner(bot: TelegramClient, banner_name: str, my_id: int):
-    if banner_name in CACHED_BANNERS:
-        logger.info(f"⚡ Баннер '{banner_name}' из кэша")
-        return CACHED_BANNERS[banner_name]
-
-    file_path = BANNER_PATHS.get(banner_name)
-    if not file_path or not os.path.exists(file_path):
-        logger.warning(f"⚠️ Баннер '{banner_name}' не найден")
-        return None
-
-    try:
-        logger.warning(f"⚠️ Первая загрузка баннера '{banner_name}'...")
-        start = time.time()
-        msg = await bot.send_file(my_id, file=file_path)
-        CACHED_BANNERS[banner_name] = msg.media
-        elapsed = time.time() - start
-        logger.info(f"✅ Баннер '{banner_name}' загружен за {elapsed:.2f}с")
-        return msg.media
-    except Exception as e:
-        logger.error(f"❌ Ошибка загрузки баннера: {e}")
-        return None
-
-
 async def preload_banners(bot: TelegramClient, my_id: int):
     """
-    Загружает все баннеры на серверы Telegram при старте бота,
-    чтобы клиентам не приходилось ждать.
+    Загружает баннеры 1 раз в жизни бота и навсегда сохраняет их file_id в json.
     """
-    logger.info("🖼 Начинаю предзагрузку баннеров на сервер Telegram...")
-    
+    logger.info("🖼 Проверка кэша баннеров на диске...")
+    changed = False
+    uploaded_paths = {}  # Чтобы не грузить одну и ту же картинку (например, menu.jpg) дважды
+
     for banner_name, file_path in BANNER_PATHS.items():
-        if banner_name not in CACHED_BANNERS:
+        if banner_name not in FILE_ID_CACHE:
             if os.path.exists(file_path):
+                # Если этот файл уже загрузили для другой кнопки
+                if file_path in uploaded_paths:
+                    FILE_ID_CACHE[banner_name] = uploaded_paths[file_path]
+                    changed = True
+                    continue
+
+                logger.info(f"⏳ ЗАГРУЖАЮ '{banner_name}' ОДИН РАЗ НАВСЕГДА (займет ~45 сек)...")
                 try:
-                    start = time.time()
-                    logger.info(f"⏳ Загружаю баннер '{banner_name}'...")
-                    # Отправляем фото вам в ЛС (my_id), чтобы получить media объект
                     msg = await bot.send_file(my_id, file=file_path)
-                    CACHED_BANNERS[banner_name] = msg.media
-                    elapsed = time.time() - start
-                    logger.info(f"✅ Баннер '{banner_name}' успешно закэширован за {elapsed:.2f}с")
+                    FILE_ID_CACHE[banner_name] = msg.file.id  # Сохраняем текстовый ID
+                    uploaded_paths[file_path] = msg.file.id
+                    changed = True
+                    logger.info(f"✅ Баннер '{banner_name}' успешно загружен!")
                 except Exception as e:
                     logger.error(f"❌ Ошибка предзагрузки баннера '{banner_name}': {e}")
             else:
-                logger.warning(f"⚠️ Файл для баннера '{banner_name}' не найден по пути: {file_path}")
-                
-    logger.info("🎉 Все баннеры готовы к работе!")
+                logger.warning(f"⚠️ Файл для баннера не найден: {file_path}")
+
+    if changed:
+        with open(CACHE_FILE, "w") as f:
+            json.dump(FILE_ID_CACHE, f)
+        logger.info("💾 Кэш баннеров сохранен в banners_cache.json! Больше загрузок не будет.")
+    else:
+        logger.info("⚡ Все баннеры найдены на диске! Загрузка мгновенная.")
+
+
+async def get_cached_banner(bot: TelegramClient, banner_name: str, my_id: int):
+    # Мгновенно отдаем сохраненный текстовый ID из памяти
+    return FILE_ID_CACHE.get(banner_name)
 
 
 async def send_banner(bot, event, banner_name: str, caption: str, buttons, user_id, my_id: int):
-    banner_media = await get_cached_banner(bot, banner_name, my_id)
+    banner_file_id = await get_cached_banner(bot, banner_name, my_id)
     try:
         if isinstance(event, events.CallbackQuery.Event):
-            if banner_media:
-                await event.edit(caption, buttons=buttons, file=banner_media, parse_mode='md')
+            if banner_file_id:
+                await event.edit(caption, buttons=buttons, file=banner_file_id, parse_mode='md')
             else:
                 await event.edit(caption, buttons=buttons, parse_mode='md')
         else:
-            if banner_media:
-                await bot.send_file(event.chat_id, file=banner_media, caption=caption, buttons=buttons, parse_mode='md')
+            if banner_file_id:
+                await bot.send_file(event.chat_id, file=banner_file_id, caption=caption, buttons=buttons, parse_mode='md')
             else:
                 await event.respond(caption, buttons=buttons, parse_mode='md')
     except errors.MessageNotModifiedError:
