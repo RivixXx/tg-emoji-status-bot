@@ -80,8 +80,9 @@ async def preload_banners(bot: TelegramClient, my_id: int):
                 logger.info(f"⏳ ЗАГРУЖАЮ '{banner_name}' ОДИН РАЗ НАВСЕГДА (займет ~45 сек)...")
                 try:
                     msg = await bot.send_file(my_id, file=file_path)
-                    FILE_ID_CACHE[banner_name] = msg.file.id  # Сохраняем текстовый ID
-                    uploaded_paths[file_path] = msg.file.id
+                    # Сохраняем media объект (совместимо с Telethon 1.36+)
+                    FILE_ID_CACHE[banner_name] = msg.media
+                    uploaded_paths[file_path] = msg.media
                     changed = True
                     logger.info(f"✅ Баннер '{banner_name}' успешно загружен!")
                 except Exception as e:
@@ -90,16 +91,42 @@ async def preload_banners(bot: TelegramClient, my_id: int):
                 logger.warning(f"⚠️ Файл для баннера не найден: {file_path}")
 
     if changed:
+        import base64
+        import pickle
+        # Кодируем media объекты в base64 для JSON сериализации
+        encoded_cache = {}
+        for name, media in FILE_ID_CACHE.items():
+            if media:
+                encoded_cache[name] = base64.b64encode(pickle.dumps(media)).decode('utf-8')
+        
         with open(CACHE_FILE, "w") as f:
-            json.dump(FILE_ID_CACHE, f)
+            json.dump(encoded_cache, f)
         logger.info("💾 Кэш баннеров сохранен в banners_cache.json! Больше загрузок не будет.")
     else:
         logger.info("⚡ Все баннеры найдены на диске! Загрузка мгновенная.")
 
 
 async def get_cached_banner(bot: TelegramClient, banner_name: str, my_id: int):
-    # Мгновенно отдаем сохраненный текстовый ID из памяти
-    return FILE_ID_CACHE.get(banner_name)
+    # Мгновенно отдаем сохраненный media объект из памяти
+    media = FILE_ID_CACHE.get(banner_name)
+    if media:
+        return media
+    
+    # Пытаемся загрузить из файла если есть encoded версия
+    if os.path.exists(CACHE_FILE):
+        try:
+            import base64
+            import pickle
+            with open(CACHE_FILE, "r") as f:
+                encoded_cache = json.load(f)
+            if banner_name in encoded_cache:
+                media = pickle.loads(base64.b64decode(encoded_cache[banner_name]))
+                FILE_ID_CACHE[banner_name] = media
+                return media
+        except Exception as e:
+            logger.error(f"Ошибка чтения кэша: {e}")
+    
+    return None
 
 
 async def send_banner(bot, event, banner_name: str, caption: str, buttons, user_id, my_id: int):
