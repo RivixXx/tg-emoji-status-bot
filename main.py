@@ -57,6 +57,9 @@ from brains.vpn_logic import register_vpn_handlers, preload_banners
 # Задачи и проекты
 from skills.task_commands import register_task_commands
 
+# Триггеры продуктивности
+from brains.triggers import start_triggers_loop
+
 # ========== ГЛОБАЛЬНЫЕ СОСТОЯНИЯ ==========
 SHUTDOWN_EVENT = asyncio.Event()
 
@@ -142,11 +145,61 @@ async def main():
 
         await event.respond(response)
 
+    # 4. ОБРАБОТКА CALLBACK ОТ ТРИГГЕРОВ
+    @bot.on(events.CallbackQuery(chats=MY_ID))
+    async def trigger_callback_handler(event):
+        """Обработка кнопок от триггеров продуктивности"""
+        data = event.data.decode('utf-8')
+        
+        # Перерывы
+        if data == 'break_ack':
+            await event.answer("✅ Отлично! 5 минут — и снова в бой! 💪", alert=True)
+        elif data == 'break_snooze_15':
+            await event.answer("⏰ Напомню через 15 минут", alert=True)
+        
+        # Обед
+        elif data == 'lunch_ack':
+            await event.answer("✅ Приятного аппетита! 🍽️", alert=True)
+        elif data == 'lunch_snooze':
+            await event.answer("⏰ Напомню позже", alert=True)
+        
+        # Вечерний обзор
+        elif data == 'evening_review_write':
+            await event.answer("✍️ Напиши итоги дня в чат", alert=True)
+        elif data == 'plan_tomorrow':
+            await event.answer("🎯 Цели на завтра: используй /goals", alert=True)
+        elif data == 'acknowledge_evening':
+            await event.answer("😴 Спокойной ночи! 💙", alert=True)
+        
+        # Просроченные задачи
+        elif data == 'show_overdue':
+            await event.edit("🔴 **Просроченные задачи:**\n\nИспользуй /tasks для просмотра")
+        
+        # Застрявшие задачи
+        elif data == 'show_stuck_tasks':
+            await event.edit("📋 **Застрявшие задачи:**\n\nИспользуй /tasks todo")
+        
+        # Утреннее планирование
+        elif data == 'set_daily_goals':
+            await event.answer("🎯 Используй /goals plan <цель1>, <цель2>", alert=True)
+        elif data == 'show_tasks':
+            await event.answer("📋 Используй /tasks", alert=True)
+        elif data == 'show_sprint':
+            await event.answer("🏃 Используй /sprints", alert=True)
+        
+        else:
+            return  # Пропускаем, это не наша кнопка
+        
+        await event.answer()
+
     # 3. ИНИЦИАЛИЗАЦИЯ НАПОМИНАНИЙ
     reminder_manager.set_client(bot, MY_ID)
     reminders_task = asyncio.create_task(start_reminder_loop())
 
-    # 4. ФОНОВЫЕ ЗАДАЧИ ВЛАДЕЛЬЦА
+    # 4. ТРИГГЕРЫ ПРОДУКТИВНОСТИ
+    triggers_task = asyncio.create_task(start_triggers_loop(bot, MY_ID))
+
+    # 5. ФОНОВЫЕ ЗАДАЧИ ВЛАДЕЛЬЦА
     background_task = asyncio.create_task(owner_background_tasks())
 
     logger.info("=" * 60)
@@ -154,6 +207,7 @@ async def main():
     logger.info(f"👤 Владелец: {MY_ID}")
     logger.info(f"🧠 AI: {'✅' if MISTRAL_KEY else '❌'}")
     logger.info(f"💾 Supabase: {'✅' if SUPABASE_URL else '❌'}")
+    logger.info(f"🎯 Триггеры продуктивности: ✅")
     logger.info("=" * 60)
 
     await bot.run_until_disconnected()
