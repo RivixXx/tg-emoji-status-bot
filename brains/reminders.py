@@ -105,84 +105,154 @@ class ReminderManager:
         self.my_id = my_id
 
     async def _save_to_db(self, reminder: Reminder):
-        """Сохраняет состояние напоминания в Supabase (Upsert)"""
-        try:
-            data = reminder.to_dict()
-            
-            # Upsert: вставляем или обновляем существующую запись
-            response = supabase_client.table("reminders").upsert(data, on_conflict="id").execute()
-            
-            if response.data:
-                logger.debug(f"💾 Reminder saved: {reminder.id}")
-            else:
-                logger.error(f"❌ Supabase Reminder Save Error: {response}")
-        except Exception as e:
-            logger.error(f"❌ Failed to save reminder to DB: {e}")
+        """
+        Сохраняет состояние напоминания в Supabase (Upsert).
+        
+        Args:
+            reminder: Объект напоминания для сохранения
+        """
+        if not supabase_client:
+            logger.debug("⚠️ Supabase клиент не инициализирован, пропускаем сохранение напоминания")
+            return
+
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                data = reminder.to_dict()
+
+                # Upsert: вставляем или обновляем существующую запись
+                response = supabase_client.table("reminders").upsert(data, on_conflict="id").execute()
+
+                if response.data:
+                    logger.debug(f"💾 Reminder saved: {reminder.id}")
+                else:
+                    logger.error(f"❌ Supabase Reminder Save Error: {response}")
+                    # Пробуем снова при пустом ответе
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2)
+
+            except asyncio.TimeoutError:
+                logger.error(f"⌛️ Reminder save timeout (attempt {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(3)
+
+            except Exception as e:
+                logger.error(f"❌ Failed to save reminder to DB (attempt {attempt + 1}/{max_retries}): {type(e).__name__} - {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)
 
     async def load_active_reminders(self):
-        """Загружает активные напоминания из базы при старте"""
-        try:
-            response = supabase_client.table("reminders")\
-                .select("*")\
-                .eq("is_active", True)\
-                .execute()
-            
-            if response.data:
-                for r_data in response.data:
-                    reminder = Reminder(
-                        id=r_data["id"],
-                        type=ReminderType(r_data["type"]),
-                        message=r_data["message"],
-                        scheduled_time=datetime.fromisoformat(r_data["scheduled_time"].replace('+00:00', '+00:00')),
-                        escalate_after=r_data.get("escalate_after", [10, 30, 60]),
-                        current_level=EscalationLevel(r_data.get("current_level", "soft")),
-                        is_active=r_data.get("is_active", True),
-                        is_confirmed=r_data.get("is_confirmed", False),
-                        snooze_until=datetime.fromisoformat(r_data["snooze_until"].replace('+00:00', '+00:00')) if r_data.get("snooze_until") else None,
-                        context=r_data.get("context", {})
-                    )
-                    self.reminders[reminder.id] = reminder
-                logger.info(f"💾 Загружено {len(self.reminders)} активных напоминаний из БД")
-            else:
-                logger.info("💾 Активных напоминаний в БД не найдено")
-        except Exception as e:
-            logger.error(f"❌ Failed to load reminders from DB: {e}")
+        """
+        Загружает активные напоминания из базы при старте.
+        
+        Returns:
+            Количество загруженных напоминаний
+        """
+        if not supabase_client:
+            logger.warning("⚠️ Supabase клиент не инициализирован, пропускаем загрузку напоминаний")
+            return 0
+
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                response = supabase_client.table("reminders")\
+                    .select("*")\
+                    .eq("is_active", True)\
+                    .execute()
+
+                if response.data:
+                    for r_data in response.data:
+                        try:
+                            reminder = Reminder(
+                                id=r_data["id"],
+                                type=ReminderType(r_data["type"]),
+                                message=r_data["message"],
+                                scheduled_time=datetime.fromisoformat(r_data["scheduled_time"].replace('+00:00', '+00:00')),
+                                escalate_after=r_data.get("escalate_after", [10, 30, 60]),
+                                current_level=EscalationLevel(r_data.get("current_level", "soft")),
+                                is_active=r_data.get("is_active", True),
+                                is_confirmed=r_data.get("is_confirmed", False),
+                                snooze_until=datetime.fromisoformat(r_data["snooze_until"].replace('+00:00', '+00:00')) if r_data.get("snooze_until") else None,
+                                context=r_data.get("context", {})
+                            )
+                            self.reminders[reminder.id] = reminder
+                        except (KeyError, ValueError) as e:
+                            logger.error(f"❌ Ошибка парсинга напоминания из БД: {e}")
+                            continue
+
+                    logger.info(f"💾 Загружено {len(self.reminders)} активных напоминаний из БД")
+                    return len(self.reminders)
+                else:
+                    logger.info("💾 Активных напоминаний в БД не найдено")
+                    return 0
+
+            except asyncio.TimeoutError:
+                logger.error(f"⌛️ Reminder load timeout (attempt {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(3)
+
+            except Exception as e:
+                logger.error(f"❌ Failed to load reminders from DB (attempt {attempt + 1}/{max_retries}): {type(e).__name__} - {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)
+
+        return 0
 
     async def send_reminder(self, reminder: Reminder, force_new: bool = False):
-        """Отправляет напоминание пользователю"""
-        if not self.client or not self.my_id: return
+        """
+        Отправляет напоминание пользователю.
         
-        ai_message = await get_or_generate_reminder(
-            reminder_id=reminder.id,
-            reminder_type=reminder.type.value,
-            escalation_level=reminder.current_level.value,
-            context=reminder.context,
-            time_str=reminder.context.get("time"),
-            force_new=force_new
-        )
-        
-        message = ai_message or reminder.get_escalation_message(reminder.current_level)
-        
-        # 🌅 Утренний брифинг (автоматически добавляем новости и погоду)
-        if reminder.type == ReminderType.MORNING:
-            logger.info("☕️ Формирование утреннего брифинга...")
-            weather = await get_weather()
-            news = await get_latest_news(limit=3)
-            events = await get_upcoming_events(max_results=5)
-            
-            briefing = f"\n\n🌤 **Погода:** {weather if weather else 'не удалось узнать'}"
-            briefing += f"\n\n🗓 **Планы на сегодня:**\n{events}"
-            briefing += f"\n\n{news}"
-            message += briefing
+        Args:
+            reminder: Объект напоминания для отправки
+            force_new: Принудительно сгенерировать новое сообщение
+        """
+        if not self.client or not self.my_id:
+            logger.warning("⚠️ Клиент или my_id не установлены, пропускаем отправку напоминания")
+            return
 
-        buttons = await self._create_reminder_buttons(reminder)
-        
         try:
-            await self.client.send_message(self.my_id, message, buttons=buttons)
-            logger.info(f"🔔 Отправлено: {reminder.id} ({reminder.current_level.value})")
-            await self._save_to_db(reminder) # Синхронизируем состояние
+            ai_message = await get_or_generate_reminder(
+                reminder_id=reminder.id,
+                reminder_type=reminder.type.value,
+                escalation_level=reminder.current_level.value,
+                context=reminder.context,
+                time_str=reminder.context.get("time"),
+                force_new=force_new
+            )
+
+            message = ai_message or reminder.get_escalation_message(reminder.current_level)
+
+            # 🌅 Утренний брифинг (автоматически добавляем новости и погоду)
+            if reminder.type == ReminderType.MORNING:
+                logger.info("☕️ Формирование утреннего брифинга...")
+                try:
+                    weather = await get_weather()
+                    news = await get_latest_news(limit=3)
+                    events = await get_upcoming_events(max_results=5)
+
+                    briefing = f"\n\n🌤 **Погода:** {weather if weather else 'не удалось узнать'}"
+                    briefing += f"\n\n🗓 **Планы на сегодня:**\n{events}"
+                    briefing += f"\n\n{news}"
+                    message += briefing
+                except Exception as e:
+                    logger.error(f"❌ Ошибка формирования брифинга: {type(e).__name__} - {e}")
+                    # Продолжаем без брифинга
+
+            buttons = await self._create_reminder_buttons(reminder)
+
+            try:
+                await self.client.send_message(self.my_id, message, buttons=buttons)
+                logger.info(f"🔔 Отправлено: {reminder.id} ({reminder.current_level.value})")
+                await self._save_to_db(reminder)  # Синхронизируем состояние
+            except Exception as send_error:
+                logger.error(f"❌ Ошибка отправки сообщения: {type(send_error).__name__} - {send_error}")
+                # Пробуем сохранить состояние даже если отправка не удалась
+                await self._save_to_db(reminder)
+
+        except asyncio.TimeoutError:
+            logger.error(f"⌛️ Таймаут при отправке напоминания {reminder.id}")
         except Exception as e:
-            logger.error(f"❌ Ошибка отправки: {e}")
+            logger.error(f"❌ Ошибка в send_reminder: {type(e).__name__} - {e}")
 
     async def _create_reminder_buttons(self, reminder: Reminder):
         """Создаёт интерактивные кнопки для напоминания"""
@@ -203,23 +273,41 @@ class ReminderManager:
         return [[types.KeyboardButtonCallback("👌 Понял", data=b"acknowledge")]]
 
     async def start_escalation(self, reminder: Reminder):
-        """Запускает эскалацию напоминания"""
-        if reminder.id in self.active_escalations:
-            self.active_escalations[reminder.id].cancel()
+        """
+        Запускает эскалацию напоминания.
         
+        Args:
+            reminder: Объект напоминания для эскалации
+        """
+        if reminder.id in self.active_escalations:
+            logger.debug(f"⚠️ Отмена предыдущей эскалации для {reminder.id}")
+            self.active_escalations[reminder.id].cancel()
+
         async def escalation_loop():
+            """Фоновая задача эскалации с обработкой ошибок"""
             levels = [
                 (EscalationLevel.FIRM, reminder.escalate_after[0] if len(reminder.escalate_after) > 0 else 10),
                 (EscalationLevel.STRICT, reminder.escalate_after[1] if len(reminder.escalate_after) > 1 else 30),
                 (EscalationLevel.URGENT, reminder.escalate_after[2] if len(reminder.escalate_after) > 2 else 60),
             ]
             for level, delay_minutes in levels:
-                if reminder.is_confirmed: return
-                await asyncio.sleep(delay_minutes * 60)
-                if reminder.is_confirmed: return
-                reminder.current_level = level
-                await self.send_reminder(reminder, force_new=True)
-        
+                try:
+                    if reminder.is_confirmed:
+                        logger.debug(f"✅ Напоминание {reminder.id} подтверждено, эскалация остановлена")
+                        return
+                    await asyncio.sleep(delay_minutes * 60)
+                    if reminder.is_confirmed:
+                        logger.debug(f"✅ Напоминание {reminder.id} подтверждено во время ожидания")
+                        return
+                    reminder.current_level = level
+                    await self.send_reminder(reminder, force_new=True)
+                except asyncio.CancelledError:
+                    logger.debug(f"⚠️ Эскалация {reminder.id} отменена")
+                    return
+                except Exception as e:
+                    logger.error(f"❌ Ошибка в escalation_loop для {reminder.id}: {type(e).__name__} - {e}")
+                    # Продолжаем эскалацию, несмотря на ошибку
+
         self.active_escalations[reminder.id] = asyncio.create_task(escalation_loop())
 
     async def add_reminder(self, reminder: Reminder):
@@ -270,6 +358,12 @@ class ReminderManager:
         return Reminder(id=f"evening_{scheduled.strftime('%Y%m%d')}", type=ReminderType.EVENING, message="Пора отдыхать!", scheduled_time=scheduled, escalate_after=[])
 
     async def confirm_reminder(self, reminder_id: str):
+        """
+        Подтверждает напоминание.
+        
+        Args:
+            reminder_id: ID напоминания для подтверждения
+        """
         if reminder_id in self.reminders:
             r = self.reminders[reminder_id]
             r.is_confirmed = True
@@ -277,10 +371,22 @@ class ReminderManager:
             if reminder_id in self.active_escalations:
                 self.active_escalations[reminder_id].cancel()
                 del self.active_escalations[reminder_id]
-            await self._save_to_db(r)
-            logger.info(f"✅ Подтверждено: {reminder_id}")
+            try:
+                await self._save_to_db(r)
+                logger.info(f"✅ Подтверждено: {reminder_id}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка сохранения подтверждения: {type(e).__name__} - {e}")
+        else:
+            logger.warning(f"⚠️ Напоминание не найдено для подтверждения: {reminder_id}")
 
     async def snooze_reminder(self, reminder_id: str, minutes: int):
+        """
+        Откладывает напоминание на указанное время.
+        
+        Args:
+            reminder_id: ID напоминания для откладывания
+            minutes: Количество минут для откладывания
+        """
         if reminder_id in self.reminders:
             r = self.reminders[reminder_id]
             r.snooze_until = datetime.now(timezone(timedelta(hours=3))) + timedelta(minutes=minutes)
@@ -288,11 +394,23 @@ class ReminderManager:
             if reminder_id in self.active_escalations:
                 self.active_escalations[reminder_id].cancel()
                 del self.active_escalations[reminder_id]
-            
-            new_r = Reminder(id=f"{reminder_id}_sn", type=r.type, message=r.message, scheduled_time=r.snooze_until, escalate_after=r.escalate_after, context=r.context)
-            await self.add_reminder(new_r)
-            await self._save_to_db(r)
-            logger.info(f"⏰ Отложено на {minutes} мин: {reminder_id}")
+
+            try:
+                new_r = Reminder(
+                    id=f"{reminder_id}_sn",
+                    type=r.type,
+                    message=r.message,
+                    scheduled_time=r.snooze_until,
+                    escalate_after=r.escalate_after,
+                    context=r.context
+                )
+                await self.add_reminder(new_r)
+                await self._save_to_db(r)
+                logger.info(f"⏰ Отложено на {minutes} мин: {reminder_id}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка откладывания напоминания: {type(e).__name__} - {e}")
+        else:
+            logger.warning(f"⚠️ Напоминание не найдено для откладывания: {reminder_id}")
 
     def parse_snooze_command(self, text: str) -> Optional[int]:
         text_lower = text.lower()
@@ -344,27 +462,45 @@ reminder_manager = ReminderManager()
 
 
 async def start_reminder_loop():
-    """Основной цикл проверки напоминаний"""
+    """
+    Основной цикл проверки напоминаний.
+    Запускается как фоновая задача и работает постоянно.
+    """
     logger.info("🔔 Запуск цикла напоминаний...")
-    
+
     # Загружаем активные напоминания из БД при старте
-    await reminder_manager.load_active_reminders()
-    
+    try:
+        await reminder_manager.load_active_reminders()
+    except Exception as e:
+        logger.error(f"❌ Ошибка загрузки напоминаний при старте: {type(e).__name__} - {e}")
+
     while True:
         try:
             now = datetime.now(timezone(timedelta(hours=3)))
+            
             for rid, r in list(reminder_manager.reminders.items()):
-                if not r.is_active or r.is_confirmed: continue
-                if r.snooze_until and now < r.snooze_until: continue
-                
-                if now >= r.scheduled_time:
-                    await reminder_manager.send_reminder(r)
-                    r.is_active = False  # Деактивируем для основного цикла
-                    await reminder_manager._save_to_db(r) # Сохраняем неактивное состояние в БД!
-                    
-                    if r.escalate_after:
-                        await reminder_manager.start_escalation(r)
+                try:
+                    if not r.is_active or r.is_confirmed:
+                        continue
+                    if r.snooze_until and now < r.snooze_until:
+                        continue
+
+                    if now >= r.scheduled_time:
+                        await reminder_manager.send_reminder(r)
+                        r.is_active = False  # Деактивируем для основного цикла
+                        await reminder_manager._save_to_db(r)  # Сохраняем неактивное состояние в БД!
+
+                        if r.escalate_after:
+                            await reminder_manager.start_escalation(r)
+                except Exception as reminder_error:
+                    logger.error(f"❌ Ошибка обработки напоминания {rid}: {type(reminder_error).__name__} - {reminder_error}")
+                    # Продолжаем обработку остальных напоминаний
+            
             await asyncio.sleep(60)
+            
+        except asyncio.CancelledError:
+            logger.info("👋 Цикл напоминаний остановлен")
+            break
         except Exception as e:
-            logger.error(f"❌ Ошибка в цикле: {e}")
-            await asyncio.sleep(60)
+            logger.error(f"❌ Ошибка в главном цикле напоминаний: {type(e).__name__} - {e}")
+            await asyncio.sleep(60)  # Пауза перед следующей попыткой

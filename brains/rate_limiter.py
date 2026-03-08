@@ -1,139 +1,212 @@
 """
-Rate Limiter для Karina AI API
-Ограничение количества запросов от одного клиента
+Rate Limiter Utility
+Декоратор для ограничения частоты вызовов функций (throttling)
+
+Использование:
+    @rate_limit(calls=10, period=60)  # 10 вызовов в минуту
+    async def my_function():
+        ...
 """
+import asyncio
 import time
+import logging
+from functools import wraps
+from typing import Dict, Optional
 from collections import defaultdict
-from typing import Dict, Tuple
-from dataclasses import dataclass
 
-
-@dataclass
-class RateLimitConfig:
-    """Конфигурация rate limiter"""
-    requests: int  # Максимальное количество запросов
-    window: int  # Временное окно в секундах
-
-
-# Конфигурации по умолчанию
-DEFAULT_LIMITS = {
-    "global": RateLimitConfig(requests=100, window=60),  # 100 запросов в минуту
-    "api/calendar": RateLimitConfig(requests=10, window=60),  # 10 в минуту
-    "api/memory/search": RateLimitConfig(requests=20, window=60),  # 20 в минуту
-    "api/health": RateLimitConfig(requests=30, window=60),  # 30 в минуту
-    "api/health/stats": RateLimitConfig(requests=30, window=60),  # 30 в минуту
-    "api/emotion": RateLimitConfig(requests=10, window=60),  # 10 в минуту
-    "api/plugins": RateLimitConfig(requests=20, window=60),  # 20 в минуту
-}
+logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
     """
-    Rate limiter с скользящим окном
+    Rate limiter с скользящим окном.
     
-    Использование:
-        limiter = RateLimiter()
-        allowed, retry_after = limiter.is_allowed("client_id", "endpoint")
+    Атрибуты:
+        calls: Максимальное количество вызовов
+        period: Период времени в секундах
+        key_func: Функция для получения ключа (по умолчанию None — глобальный лимит)
     """
     
-    def __init__(self, configs: Dict[str, RateLimitConfig] = None):
-        self.configs = configs or DEFAULT_LIMITS
-        # Хранилище: {client_id: {endpoint: [timestamps]}}
-        self._requests: Dict[str, Dict[str, list]] = defaultdict(lambda: defaultdict(list))
-    
-    def is_allowed(self, client_id: str, endpoint: str = "global") -> Tuple[bool, int]:
-        """
-        Проверяет может ли клиент сделать запрос
+    def __init__(self, calls: int, period: float, key_func: Optional[callable] = None):
+        self.calls = calls
+        self.period = period
+        self.key_func = key_func or (lambda *args, **kwargs: "global")
         
-        Args:
-            client_id: Уникальный идентификатор клиента (IP, user_id, etc.)
-            endpoint: Название эндпоинта для специфичного лимита
+        # Хранилище timestamps вызовов: {key: [timestamp1, timestamp2, ...]}
+        self._timestamps: Dict[str, list] = defaultdict(list)
+        self._locks: Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+    
+    def _clean_old_timestamps(self, key: str, now: float):
+        """Удаляет устаревшие timestamps"""
+        cutoff = now - self.period
+        self._timestamps[key] = [ts for ts in self._timestamps[key] if ts > cutoff]
+    
+    async def acquire(self, *args, **kwargs) -> bool:
+        """
+        Пытается получить разрешение на вызов.
         
         Returns:
-            (allowed, retry_after): (разрешено ли, секунд до следующего запроса)
+            True если вызов разрешён, False если лимит превышен
         """
+        key = self.key_func(*args, **kwargs)
         now = time.time()
-        config = self.configs.get(endpoint, self.configs["global"])
         
-        # Получаем timestamps запросов клиента
-        timestamps = self._requests[client_id][endpoint]
-        
-        # Удаляем старые запросы за пределами окна
-        window_start = now - config.window
-        timestamps = [ts for ts in timestamps if ts > window_start]
-        
-        # Проверяем лимит
-        if len(timestamps) >= config.requests:
-            # Вычисляем сколько ждать до следующего запроса
-            oldest_in_window = min(timestamps)
-            retry_after = int(oldest_in_window + config.window - now) + 1
-            self._requests[client_id][endpoint] = timestamps
-            return False, retry_after
-        
-        # Добавляем текущий запрос
-        timestamps.append(now)
-        self._requests[client_id][endpoint] = timestamps
-        
-        return True, 0
-    
-    def get_remaining(self, client_id: str, endpoint: str = "global") -> int:
-        """Получает количество оставшихся запросов"""
-        now = time.time()
-        config = self.configs.get(endpoint, self.configs["global"])
-        timestamps = self._requests[client_id][endpoint]
-        
-        # Удаляем старые
-        window_start = now - config.window
-        timestamps = [ts for ts in timestamps if ts > window_start]
-        
-        return max(0, config.requests - len(timestamps))
-    
-    def reset(self, client_id: str, endpoint: str = None):
-        """Сбрасывает лимиты для клиента"""
-        if endpoint:
-            self._requests[client_id][endpoint] = []
-        else:
-            self._requests[client_id] = defaultdict(list)
-    
-    def cleanup(self):
-        """Очищает старые записи (рекомендуется запускать периодически)"""
-        now = time.time()
-        max_window = max(config.window for config in self.configs.values())
-        cutoff = now - max_window
-        
-        # Находим клиентов для удаления
-        empty_clients = []
-        
-        for client_id, endpoints in self._requests.items():
-            for endpoint in list(endpoints.keys()):
-                endpoints[endpoint] = [ts for ts in endpoints[endpoint] if ts > cutoff]
-                if not endpoints[endpoint]:
-                    del endpoints[endpoint]
+        async with self._locks[key]:
+            self._clean_old_timestamps(key, now)
             
-            if not endpoints:
-                empty_clients.append(client_id)
+            if len(self._timestamps[key]) < self.calls:
+                self._timestamps[key].append(now)
+                return True
+            
+            return False
+    
+    async def wait_if_needed(self, *args, **kwargs) -> float:
+        """
+        Ждёт если лимит превышен, возвращает время ожидания.
         
-        # Удаляем пустых клиентов
-        for client_id in empty_clients:
-            del self._requests[client_id]
+        Returns:
+            Время ожидания в секундах (0 если не нужно ждать)
+        """
+        key = self.key_func(*args, **kwargs)
+        now = time.time()
+        
+        async with self._locks[key]:
+            self._clean_old_timestamps(key, now)
+            
+            if len(self._timestamps[key]) < self.calls:
+                self._timestamps[key].append(now)
+                return 0.0
+            
+            # Ждём пока освободится слот
+            oldest = min(self._timestamps[key])
+            wait_time = oldest + self.period - now
+            
+            if wait_time > 0:
+                logger.debug(f"⏳ Rate limit: ждём {wait_time:.2f}s")
+                await asyncio.sleep(wait_time)
+                
+                # Очищаем и добавляем новый timestamp
+                self._clean_old_timestamps(key, time.time())
+                self._timestamps[key].append(time.time())
+            
+            return max(0, wait_time)
+    
+    def get_remaining(self, *args, **kwargs) -> int:
+        """
+        Возвращает количество оставшихся вызовов.
+        
+        Returns:
+            Количество оставшихся вызовов в текущем окне
+        """
+        key = self.key_func(*args, **kwargs)
+        now = time.time()
+        
+        # Не блокируем, просто считаем
+        self._clean_old_timestamps(key, now)
+        return max(0, self.calls - len(self._timestamps[key]))
+    
+    def reset(self, key: str = "global"):
+        """Сбрасывает лимит для ключа"""
+        if key in self._timestamps:
+            del self._timestamps[key]
+            logger.info(f"🔄 Rate limit сброшен для: {key}")
 
 
-# Глобальный экземпляр
-rate_limiter = RateLimiter()
-
-
-def create_rate_limit_headers(client_id: str, endpoint: str = "global") -> Dict[str, str]:
+def rate_limit(calls: int, period: float, key_func: Optional[callable] = None, 
+               block: bool = True, error_message: str = None):
     """
-    Создаёт заголовки для rate limiting
+    Декоратор для ограничения частоты вызовов асинхронных функций.
+    
+    Args:
+        calls: Максимальное количество вызовов
+        period: Период времени в секундах
+        key_func: Функция для получения ключа rate limiting
+        block: Если True — ждать, если False — возвращать ошибку
+        error_message: Сообщение об ошибке при превышении лимита
     
     Returns:
-        Заголовки X-RateLimit-*
-    """
-    remaining = rate_limiter.get_remaining(client_id, endpoint)
-    config = rate_limiter.configs.get(endpoint, rate_limiter.configs["global"])
+        Декорированная функция
     
-    return {
-        "X-RateLimit-Limit": str(config.requests),
-        "X-RateLimit-Remaining": str(remaining),
-        "X-RateLimit-Reset": str(int(time.time()) + config.window)
-    }
+    Примеры:
+        # Глобальный лимит
+        @rate_limit(calls=10, period=60)
+        async def api_call():
+            ...
+        
+        # Лимит на пользователя
+        @rate_limit(calls=5, period=60, key_func=lambda user_id, **kwargs: str(user_id))
+        async def user_action(user_id):
+            ...
+        
+        # Без блокировки (возвращает None при превышении)
+        @rate_limit(calls=10, period=60, block=False)
+        async def sensitive_operation():
+            ...
+    """
+    limiter = RateLimiter(calls, period, key_func)
+    error_message = error_message or f"Rate limit exceeded: {calls} calls per {period}s"
+    
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            if block:
+                # Ждём если нужно
+                wait_time = await limiter.wait_if_needed(*args, **kwargs)
+                if wait_time > 0:
+                    logger.info(f"⏳ {func.__name__}: ожидание {wait_time:.2f}s из-за rate limit")
+            else:
+                # Возвращаем None если лимит превышен
+                if not await limiter.acquire(*args, **kwargs):
+                    logger.warning(f"⚠️ {func.__name__}: rate limit превышен")
+                    return None
+            
+            return await func(*args, **kwargs)
+        
+        # Добавляем атрибуты для отладки
+        wrapper._rate_limiter = limiter
+        wrapper._rate_limit_calls = calls
+        wrapper._rate_limit_period = period
+        
+        return wrapper
+    
+    return decorator
+
+
+# ============================================================================
+# Предустановленные лимитеры для типичных сценариев
+# ============================================================================
+
+# API лимиты (для внешних API)
+mistral_limiter = RateLimiter(calls=30, period=60)  # 30 запросов в минуту
+supabase_limiter = RateLimiter(calls=100, period=60)  # 100 запросов в минуту
+telegram_limiter = RateLimiter(calls=30, period=1)  # 30 сообщений в секунду
+
+# Пользовательские лимиты (для защиты от злоупотреблений)
+user_command_limiter = RateLimiter(calls=10, period=60, 
+                                    key_func=lambda user_id, **kwargs: str(user_id))  # 10 команд в минуту на пользователя
+vpn_key_limiter = RateLimiter(calls=5, period=3600,
+                               key_func=lambda user_id, **kwargs: str(user_id))  # 5 ключей в час на пользователя
+
+
+# ============================================================================
+# Декораторы для типичных сценариев
+# ============================================================================
+
+def api_rate_limit(calls: int = 30, period: float = 60):
+    """Декоратор для API запросов"""
+    return rate_limit(calls=calls, period=period, block=True,
+                      error_message=f"API rate limit: {calls} calls per {period}s")
+
+
+def user_rate_limit(calls: int = 10, period: float = 60):
+    """Декоратор для пользовательских команд"""
+    return rate_limit(calls=calls, period=period, block=True,
+                      key_func=lambda user_id, **kwargs: f"user:{user_id}",
+                      error_message=f"Команд слишком много: {calls} в {period}s")
+
+
+def vpn_rate_limit(calls: int = 5, period: float = 3600):
+    """Декоратор для генерации VPN ключей"""
+    return rate_limit(calls=calls, period=period, block=False,
+                      key_func=lambda user_id, **kwargs: f"vpn:{user_id}",
+                      error_message=f"Лимит VPN ключей: {calls} в час")

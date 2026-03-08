@@ -48,32 +48,92 @@ ai_breaker = CircuitBreaker()
 # Глобальный клиент для переиспользования соединений
 
 async def mistral_request_with_retry(url, headers, payload, max_retries=2):
-    """Запрос к Mistral API с retry для 429 ошибок"""
+    """
+    Запрос к Mistral API с retry для 429 ошибок и обработкой различных типов ошибок.
+    
+    Args:
+        url: URL API
+        headers: Заголовки запроса
+        payload: Тело запроса
+        max_retries: Максимальное количество попыток
+    
+    Returns:
+        JSON ответ или None при неудаче
+    """
     for attempt in range(max_retries):
         try:
             response = await http_client.post(url, json=payload, headers=headers)
-            
+
             if response.status_code == 200:
                 ai_breaker.record_success()
                 return response.json()
             elif response.status_code == 429:
+                # Rate limit — экспоненциальная задержка
                 wait_time = (attempt + 1) * 2
                 logger.warning(f"⚠️ Mistral API rate limit (429). Попытка {attempt + 1}/{max_retries}. Жду {wait_time}s...")
                 await asyncio.sleep(wait_time)
-            else:
-                logger.error(f"Mistral API Error: {response.status_code} - {response.text[:200]}")
+                # Не считаем это за failure для circuit breaker
+            elif response.status_code == 401:
+                # Authentication error — не имеет смысла retry
+                logger.error(f"🔐 Mistral API Authentication Error (401). Проверьте API ключ.")
                 ai_breaker.record_failure()
                 return None
-        except httpx.TimeoutException:
-            logger.error(f"⌛️ Mistral API Timeout (attempt {attempt + 1})")
-            ai_breaker.record_failure()
-            if attempt == max_retries - 1: return None
-        except httpx.RequestError as e:
-            logger.error(f"Request error (attempt {attempt + 1}): {e}")
+            elif response.status_code == 400:
+                # Bad request — ошибка в параметрах
+                logger.error(f"❌ Mistral API Bad Request (400): {response.text[:200]}")
+                ai_breaker.record_failure()
+                return None
+            elif response.status_code >= 500:
+                # Server error — можно retry
+                logger.warning(f"⚠️ Mistral API Server Error ({response.status_code}). Попытка {attempt + 1}/{max_retries}.")
+                ai_breaker.record_failure()
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)
+            else:
+                # Другие ошибки
+                logger.error(f"❌ Mistral API Error: {response.status_code} - {response.text[:200]}")
+                ai_breaker.record_failure()
+                return None
+
+        except httpx.TimeoutException as e:
+            # Таймаут запроса
+            logger.error(f"⌛️ Mistral API Timeout (attempt {attempt + 1}/{max_retries}): {type(e).__name__}")
             ai_breaker.record_failure()
             if attempt < max_retries - 1:
                 await asyncio.sleep(2)
-    
+            elif attempt == max_retries - 1:
+                return None
+
+        except httpx.ConnectError as e:
+            # Ошибка подключения — проблема с сетью
+            logger.error(f"🔌 Mistral API Connect Error (attempt {attempt + 1}/{max_retries}): {e}")
+            ai_breaker.record_failure()
+            if attempt < max_retries - 1:
+                await asyncio.sleep(3)  # Более длительная пауза для проблем сети
+            elif attempt == max_retries - 1:
+                return None
+
+        except httpx.RequestError as e:
+            # Другие ошибки запроса
+            logger.error(f"❌ Mistral API Request Error (attempt {attempt + 1}/{max_retries}): {type(e).__name__} - {e}")
+            ai_breaker.record_failure()
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+            elif attempt == max_retries - 1:
+                return None
+
+        except json.JSONDecodeError as e:
+            # Ошибка парсинга JSON ответа
+            logger.error(f"📄 Mistral API JSON Decode Error: {e}")
+            ai_breaker.record_failure()
+            return None
+
+        except Exception as e:
+            # Неожиданная ошибка — логируем и прекращаем retry
+            logger.exception(f"💥 Mistral API Unexpected Error (attempt {attempt + 1}/{max_retries}): {type(e).__name__} - {e}")
+            ai_breaker.record_failure()
+            return None
+
     return None
 
 # Хранилище истории: {chat_id: [messages]}
@@ -269,25 +329,46 @@ TOOLS = [
 ]
 
 async def ask_karina(prompt: str, chat_id: int = 0) -> str:
-    """Запрос к Mistral AI с памятью на 10 сообщений и RAG"""
+    """
+    Запрос к Mistral AI с памятью на 10 сообщений и RAG.
+    
+    Args:
+        prompt: Сообщение пользователя
+        chat_id: ID чата для контекста и фильтрации памяти
+    
+    Returns:
+        Ответ от AI или сообщение об ошибке
+    """
     if not MISTRAL_API_KEY:
         return "У меня нет ключа от моих новых мозгов... 😔"
 
     # Проверка Circuit Breaker
     if not ai_breaker.can_proceed():
         if ai_breaker.is_open and time.time() - ai_breaker.last_failure_time > ai_breaker.recovery_time:
-             # Автоматически сбрасываем при попытке прохода после времени восстановления
-             ai_breaker.record_success()
+            # Автоматически сбрасываем при попытке прохода после времени восстановления
+            logger.info("🔄 AI Circuit Breaker: попытка автоматического восстановления")
+            ai_breaker.record_success()
         else:
-             return "Ой, я кажется немного переутомилась... 🧠💨 Дай мне минутку прийти в себя, и я снова буду готова болтать!"
+            logger.warning(f"⚠️ AI Circuit Breaker открыт. Запрос отклонён.")
+            return "Ой, я кажется немного переутомилась... 🧠💨 Дай мне минутку прийти в себя, и я снова буду готова болтать!"
 
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # Передаем chat_id для фильтрации памяти (SaaS ready)
-    context_memory = await search_memories(prompt, user_id=chat_id)
-
-    # Получаем историю из кэша
-    chat_history = await chat_history_cache.get(chat_id)
     
+    try:
+        # Передаем chat_id для фильтрации памяти (SaaS ready)
+        context_memory = await search_memories(prompt, user_id=chat_id)
+
+        # Получаем историю из кэша
+        chat_history = await chat_history_cache.get(chat_id)
+    except asyncio.TimeoutError:
+        logger.error("⌛️ Таймаут при загрузке памяти/истории")
+        return "Я временно не могу получить доступ к памяти... Попробуй еще раз! 🧠"
+    except Exception as e:
+        logger.exception(f"❌ Ошибка загрузки памяти/истории: {type(e).__name__} - {e}")
+        # Продолжаем без памяти, если она недоступна
+        context_memory = ""
+        chat_history = []
+
     headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
 
     user_content = prompt
@@ -313,7 +394,13 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
         )
 
         if not result:
+            logger.warning("⚠️ Mistral API не вернула результат")
             return "Мои мысли спутались... попробуй еще раз? 🧠"
+
+        # Проверяем структуру ответа
+        if 'choices' not in result or not result['choices']:
+            logger.error(f"❌ Неверная структура ответа Mistral: {result.keys() if isinstance(result, dict) else type(result)}")
+            return "Я получила странный ответ от сервера... Попробуй еще раз! 🤔"
 
         message = result['choices'][0]['message']
 
@@ -321,13 +408,17 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
         if message.get("tool_calls"):
             # Добавляем запрос на вызов тула в историю (Mistral требует этого для контекста)
             chat_history.append(message)
-            
-            # Выполняем функции и получаем результаты
-            tool_messages = await _process_tool_calls(message["tool_calls"], chat_id)
-            
-            # Добавляем результаты в историю
-            chat_history.extend(tool_messages)
-            
+
+            try:
+                # Выполняем функции и получаем результаты
+                tool_messages = await _process_tool_calls(message["tool_calls"], chat_id)
+
+                # Добавляем результаты в историю
+                chat_history.extend(tool_messages)
+            except Exception as e:
+                logger.exception(f"❌ Ошибка выполнения инструментов: {type(e).__name__} - {e}")
+                return "Я запуталась в инструментах... Попробуй перефразировать вопрос! 🔧"
+
             # ДЕЛАЕМ ВТОРОЙ ЗАПРОС К MISTRAL, чтобы она прочитала результаты и ответила красиво
             messages = [{"role": "system", "content": SYSTEM_PROMPT.format(now=now_str)}] + chat_history
             second_result = await mistral_request_with_retry(
@@ -338,28 +429,43 @@ async def ask_karina(prompt: str, chat_id: int = 0) -> str:
                     "temperature": 0.3
                 }
             )
-            
+
             if not second_result:
+                logger.warning("⚠️ Второй запрос к Mistral не удался")
                 return "Функция выполнена, но я не смогла сформулировать ответ... ⚙️"
-                
+
+            if 'choices' not in second_result or not second_result['choices']:
+                logger.error(f"❌ Неверная структура второго ответа Mistral")
+                return "Я снова запуталась... Попробуй еще раз! 🤔"
+
             response_text = second_result['choices'][0]['message']['content'].strip()
-            
+
             # Сохраняем ответ в историю
             chat_history.append({"role": "assistant", "content": response_text})
             await chat_history_cache.set(chat_id, chat_history)
-            
+
             return response_text
 
         response_text = message['content'].strip()
-        
+
         # Сохраняем ответ в историю
         chat_history.append({"role": "assistant", "content": response_text})
         await chat_history_cache.set(chat_id, chat_history)
-        
+
         return response_text
 
+    except asyncio.TimeoutError:
+        logger.error("⌛️ Таймаут запроса к Mistral AI")
+        ai_breaker.record_failure()
+        return "Я жду ответ слишком долго... Проверь интернет и попробуй снова! 🔌"
+
+    except httpx.ConnectError as e:
+        logger.error(f"🔌 Ошибка подключения к Mistral: {e}")
+        ai_breaker.record_failure()
+        return "Нет подключения к интернету... Проверь сеть! 🌐"
+
     except Exception as e:
-        logger.error(f"Mistral connection error: {e}")
+        logger.exception(f"💥 Неожиданная ошибка в ask_karina: {type(e).__name__} - {e}")
         ai_breaker.record_failure()
         return "Кажется, я потеряла связь со своим облачным разумом... 🔌 Попробуй чуть позже!"
 

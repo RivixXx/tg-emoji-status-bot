@@ -155,72 +155,153 @@ async def send_banner(bot, event, banner_name: str, caption: str, buttons, user_
 
 
 # ========== MARZBAN ==========
-async def get_marzban_token():
+async def get_marzban_token() -> str | None:
+    """
+    Получает токен доступа к Marzban API.
+    
+    Returns:
+        Токен доступа или None при ошибке
+    """
     start = time.time()
-    try:
-        resp = await http.post(
-            f"{MARZBAN_URL}/api/admin/token",
-            data={"username": MARZBAN_USER, "password": MARZBAN_PASS}
-        )
-        log_timing("Marzban: токен", start)
-        if resp.status_code == 200:
-            return resp.json().get("access_token")
-        return None
-    except Exception as e:
-        logger.error(f"❌ Marzban token: {e}")
-        return None
+    max_retries = 2
+    
+    for attempt in range(max_retries):
+        try:
+            resp = await http.post(
+                f"{MARZBAN_URL}/api/admin/token",
+                data={"username": MARZBAN_USER, "password": MARZBAN_PASS},
+                timeout=30.0
+            )
+            log_timing("Marzban: токен", start)
+            
+            if resp.status_code == 200:
+                return resp.json().get("access_token")
+            elif resp.status_code == 401:
+                logger.error("🔐 Marzban: Неверные учётные данные (401)")
+                return None
+            elif resp.status_code >= 500:
+                logger.warning(f"⚠️ Marzban: Server Error ({resp.status_code}), попытка {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)
+            else:
+                logger.error(f"❌ Marzban token: {resp.status_code} - {resp.text[:100]}")
+                return None
+                
+        except httpx.TimeoutException:
+            logger.error(f"⌛️ Marzban token timeout (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+        except httpx.ConnectError as e:
+            logger.error(f"🔌 Marzban connect error (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(3)
+        except Exception as e:
+            logger.error(f"❌ Marzban token error (attempt {attempt + 1}/{max_retries}): {type(e).__name__} - {e}")
+            return None
+    
+    return None
 
 
-async def create_marzban_user(username: str, days: int = 30):
+async def create_marzban_user(username: str, days: int = 30) -> dict | None:
+    """
+    Создаёт пользователя в Marzban.
+    
+    Args:
+        username: Имя пользователя
+        days: Количество дней доступа
+    
+    Returns:
+        Данные пользователя или None при ошибке
+    """
     start = time.time()
     logger.info(f"🔧 Marzban: создание {username} на {days} дн.")
-    
+
     token = await get_marzban_token()
     if not token:
+        logger.error("❌ Marzban: Не удалось получить токен")
         return None
+
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            expire = int((datetime.now() + timedelta(days=days)).timestamp())
+            resp = await http.post(
+                f"{MARZBAN_URL}/api/user",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"username": username, "inbound_tags": ["VLESS"], "expire": expire, "data_limit": 0},
+                timeout=30.0
+            )
+            log_timing("Marzban: создание", start)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                logger.info(f"✅ Marzban: пользователь создан")
+                return {
+                    "username": data.get("username"),
+                    "vless": data.get("links", {}).get("VLESS", ""),
+                    "expire": datetime.fromtimestamp(expire)
+                }
+            elif resp.status_code == 409:
+                logger.error(f"🔐 Marzban: Пользователь уже существует ({username})")
+                return None
+            elif resp.status_code >= 500:
+                logger.warning(f"⚠️ Marzban: Server Error ({resp.status_code}), попытка {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)
+            else:
+                logger.error(f"❌ Marzban: {resp.status_code} - {resp.text[:100]}")
+                return None
+
+        except httpx.TimeoutException:
+            logger.error(f"⌛️ Marzban create timeout (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+        except httpx.ConnectError as e:
+            logger.error(f"🔌 Marzban connect error (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(3)
+        except Exception as e:
+            logger.error(f"❌ Marzban create error (attempt {attempt + 1}/{max_retries}): {type(e).__name__} - {e}")
+            return None
     
-    try:
-        expire = int((datetime.now() + timedelta(days=days)).timestamp())
-        resp = await http.post(
-            f"{MARZBAN_URL}/api/user",
-            headers={"Authorization": f"Bearer {token}"},
-            json={"username": username, "inbound_tags": ["VLESS"], "expire": expire, "data_limit": 0}
-        )
-        log_timing("Marzban: создание", start)
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            logger.info(f"✅ Marzban: пользователь создан")
-            return {
-                "username": data.get("username"),
-                "vless": data.get("links", {}).get("VLESS", ""),
-                "expire": datetime.fromtimestamp(expire)
-            }
-        logger.error(f"❌ Marzban: {resp.status_code}")
-        return None
-    except Exception as e:
-        logger.error(f"❌ Marzban error: {e}")
-        return None
+    return None
 
 
-async def generate_vless_key(user_id: int, days: int = 1, device: str = "phone"):
+async def generate_vless_key(user_id: int, days: int = 1, device: str = "phone") -> dict | None:
+    """
+    Генерирует VLESS ключ для пользователя.
+    
+    Args:
+        user_id: ID пользователя в Telegram
+        days: Количество дней доступа
+        device: Тип устройства
+    
+    Returns:
+        Данные ключа или None при ошибке
+    """
     start = time.time()
-    
+
     device_map = {"Телефон": "phone", "Ноутбук": "laptop", "Планшет": "tablet", "Тест": "trial"}
     device_en = device_map.get(device, device.lower().replace(" ", "_"))
     username = f"vpn_{user_id}_{int(time.time())}_{device_en}"[:32]
-    
-    user_data = await create_marzban_user(username, days)
-    if user_data:
-        log_timing("Генерация ключа", start)
-        return {
-            "key": user_data["vless"],
-            "username": user_data["username"],
-            "expire": user_data["expire"],
-            "device": device,
-            "days": days
-        }
-    return None
+
+    try:
+        user_data = await create_marzban_user(username, days)
+        if user_data:
+            log_timing("Генерация ключа", start)
+            return {
+                "key": user_data["vless"],
+                "username": user_data["username"],
+                "expire": user_data["expire"],
+                "device": device,
+                "days": days
+            }
+        else:
+            logger.error(f"❌ Не удалось сгенерировать ключ для {user_id}")
+            return None
+    except Exception as e:
+        logger.error(f"❌ generate_vless_key error: {type(e).__name__} - {e}")
+        return None
 
 
 # ========== РЕГИСТРАЦИЯ ХЭНДЛЕРОВ ==========
@@ -274,29 +355,49 @@ def register_vpn_handlers(bot: TelegramClient, my_id: int):
         # ВЛАДЕЛЕЦ — AI кнопки
         # ============================================
         if user_id == my_id:
-            await event.answer()
-            
-            if data == "ai_calendar":
-                from brains.calendar import get_upcoming_events
-                events_info = await get_upcoming_events()
-                await event.edit(f"🗓 **Календарь:**\n\n{events_info}")
-                
-            elif data == "ai_health":
-                from brains.health import get_health_report_text
-                health_report = await get_health_report_text(7)
-                await event.edit(f"💉 **Здоровье:**\n\n{health_report}")
-                
-            elif data == "ai_news":
-                from brains.news import get_latest_news
-                news = await get_latest_news(limit=3, user_id=my_id)
-                await event.edit(f"📰 **Новости:**\n\n{news}")
-                
-            elif data == "ai_memory":
-                await event.edit("🧠 **Память**\n\nИспользуйте команду /memory для управления памятью.")
-                
-            elif data.startswith("vpn_"):
-                await event.answer("⚙️ Это для клиентов", alert=True)
-                
+            try:
+                await event.answer()
+
+                if data == "ai_calendar":
+                    try:
+                        from brains.calendar import get_upcoming_events
+                        events_info = await get_upcoming_events()
+                        await event.edit(f"🗓 **Календарь:**\n\n{events_info}")
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка календаря: {type(e).__name__} - {e}")
+                        await event.edit("⚠️ Ошибка при загрузке календаря...")
+
+                elif data == "ai_health":
+                    try:
+                        from brains.health import get_health_report_text
+                        health_report = await get_health_report_text(7)
+                        await event.edit(f"💉 **Здоровье:**\n\n{health_report}")
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка здоровья: {type(e).__name__} - {e}")
+                        await event.edit("⚠️ Ошибка при загрузке статистики здоровья...")
+
+                elif data == "ai_news":
+                    try:
+                        from brains.news import get_latest_news
+                        news = await get_latest_news(limit=3, user_id=my_id)
+                        await event.edit(f"📰 **Новости:**\n\n{news}")
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка новостей: {type(e).__name__} - {e}")
+                        await event.edit("⚠️ Ошибка при загрузке новостей...")
+
+                elif data == "ai_memory":
+                    await event.edit("🧠 **Память**\n\nИспользуйте команду /memory для управления памятью.")
+
+                elif data.startswith("vpn_"):
+                    await event.answer("⚙️ Это для клиентов", alert=True)
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка в callback_handler (владелец): {type(e).__name__} - {e}")
+                try:
+                    await event.answer("⚠️ Произошла ошибка", alert=True)
+                except:
+                    pass
+
             log_timing(f"Обработка '{data}'", start_time)
             return
 
@@ -314,109 +415,126 @@ def register_vpn_handlers(bot: TelegramClient, my_id: int):
 
         user = VPN_USERS[user_id]
 
-        # ⚡ СРАЗУ отвечаем на callback query, чтобы ID не истёк во время загрузки баннера
-        await event.answer()
+        try:
+            # ⚡ СРАЗУ отвечаем на callback query, чтобы ID не истёк во время загрузки баннера
+            await event.answer()
 
-        # Навигация
-        if data == "main_menu":
-            await send_banner(bot, event, "menu", text_welcome(user_id), inline_main_menu(), user_id, my_id)
+            # Навигация
+            if data == "main_menu":
+                await send_banner(bot, event, "menu", text_welcome(user_id), inline_main_menu(), user_id, my_id)
 
-        elif data == "profile_menu":
-            await send_banner(
-                bot, event, "profile", text_profile(user_id, user),
-                inline_profile(len(user.get("keys", [])) > 0), user_id, my_id
-            )
+            elif data == "profile_menu":
+                await send_banner(
+                    bot, event, "profile", text_profile(user_id, user),
+                    inline_profile(len(user.get("keys", [])) > 0), user_id, my_id
+                )
 
-        elif data == "shop_tariffs":
-            await send_banner(bot, event, "shop", text_tariffs(), inline_tariffs(), user_id, my_id)
+            elif data == "shop_tariffs":
+                await send_banner(bot, event, "shop", text_tariffs(), inline_tariffs(), user_id, my_id)
 
-        elif data == "trial_activate":
-            if user.get("trial_used"):
-                await event.answer("❌ Тест уже использован", alert=True)
-            else:
-                await event.answer("🎁 Активация...", alert=False)
-                key_data = await generate_vless_key(user_id, days=1, device="trial")
-                if key_data:
-                    user["trial_used"] = True
-                    user["keys"].append(key_data)
-                    await event.edit(
-                        f"🎉 **Тест активирован!**\n\n🔑 Ключ:\n`{key_data['key']}`\n\n⏱ Срок: 24 часа",
-                        buttons=inline_back()
-                    )
+            elif data == "trial_activate":
+                if user.get("trial_used"):
+                    await event.answer("❌ Тест уже использован", alert=True)
                 else:
-                    await event.answer("❌ Ошибка", alert=True)
+                    await event.answer("🎁 Активация...", alert=False)
+                    try:
+                        key_data = await generate_vless_key(user_id, days=1, device="trial")
+                        if key_data:
+                            user["trial_used"] = True
+                            user["keys"].append(key_data)
+                            await event.edit(
+                                f"🎉 **Тест активирован!**\n\n🔑 Ключ:\n`{key_data['key']}`\n\n⏱ Срок: 24 часа",
+                                buttons=inline_back()
+                            )
+                        else:
+                            await event.answer("❌ Ошибка генерации ключа", alert=True)
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка активации теста: {type(e).__name__} - {e}")
+                        await event.answer("❌ Ошибка при активации", alert=True)
 
-        elif data.startswith("tariff_"):
-            months_map = {"tariff_1": (1, 150), "tariff_3": (3, 400), "tariff_6": (6, 750)}
-            months, amount = months_map.get(data, (1, 150))
-            await send_banner(
-                bot, event, "shop", text_payment(amount, months),
-                [[Button.inline(f"💰 Оплатить {amount}₽", b"pay_confirm")], [Button.inline("◀️ Назад", b"shop_tariffs")]],
-                user_id, my_id
-            )
+            elif data.startswith("tariff_"):
+                months_map = {"tariff_1": (1, 150), "tariff_3": (3, 400), "tariff_6": (6, 750)}
+                months, amount = months_map.get(data, (1, 150))
+                await send_banner(
+                    bot, event, "shop", text_payment(amount, months),
+                    [[Button.inline(f"💰 Оплатить {amount}₽", b"pay_confirm")], [Button.inline("◀️ Назад", b"shop_tariffs")]],
+                    user_id, my_id
+                )
 
-        elif data == "pay_confirm":
-            await event.answer("⏳ Обработка...", alert=False)
-            await asyncio.sleep(2)
+            elif data == "pay_confirm":
+                await event.answer("⏳ Обработка...", alert=False)
+                await asyncio.sleep(2)
 
-            months = 1
-            keys = []
-            for device in ["Телефон", "Ноутбук", "Планшет"]:
-                key_data = await generate_vless_key(user_id, days=months * 30, device=device)
-                if key_data:
-                    keys.append(key_data)
+                try:
+                    months = 1
+                    keys = []
+                    for device in ["Телефон", "Ноутбук", "Планшет"]:
+                        key_data = await generate_vless_key(user_id, days=months * 30, device=device)
+                        if key_data:
+                            keys.append(key_data)
 
-            if keys:
-                user["keys"].extend(keys)
+                    if keys:
+                        user["keys"].extend(keys)
 
-                qr = qrcode.QRCode(version=1, box_size=10, border=2)
-                qr.add_data(keys[0]["key"])
-                img = qr.make_image(fill_color="black", back_color="white")
-                bio = io.BytesIO()
-                bio.name = 'vpn_qr.png'
-                img.save(bio, 'PNG')
-                bio.seek(0)
+                        qr = qrcode.QRCode(version=1, box_size=10, border=2)
+                        qr.add_data(keys[0]["key"])
+                        img = qr.make_image(fill_color="black", back_color="white")
+                        bio = io.BytesIO()
+                        bio.name = 'vpn_qr.png'
+                        img.save(bio, 'PNG')
+                        bio.seek(0)
 
-                caption = f"🟢 **ОПЛАТА ПОДТВЕРЖДЕНА**\n\n🔑 **Ключи:**\n"
-                for i, key in enumerate(keys, 1):
-                    caption += f"\n**{i}. {key['device']}:**\n`{key['key']}`"
+                        caption = f"🟢 **ОПЛАТА ПОДТВЕРЖДЕНА**\n\n🔑 **Ключи:**\n"
+                        for i, key in enumerate(keys, 1):
+                            caption += f"\n**{i}. {key['device']}:**\n`{key['key']}`"
 
-                await bot.send_file(user_id, file=bio, caption=caption, buttons=inline_profile(True))
+                        await bot.send_file(user_id, file=bio, caption=caption, buttons=inline_profile(True))
+                    else:
+                        logger.error(f"❌ Не удалось сгенерировать ключи для {user_id}")
+                        await event.answer("❌ Ошибка генерации ключей", alert=True)
+                except Exception as e:
+                    logger.error(f"❌ Ошибка оплаты: {type(e).__name__} - {e}")
+                    await event.answer("❌ Ошибка при оплате", alert=True)
+
+            elif data == "my_keys":
+                await send_banner(bot, event, "profile", text_keys(user.get("keys", [])), inline_back(), user_id, my_id)
+
+            elif data == "balance":
+                await event.answer(f"💳 Баланс: {user.get('balance', 0)}₽", alert=True)
+
+            elif data == "history":
+                await event.answer("📜 История пуста", alert=True)
+
+            elif data.startswith("instr_"):
+                platform_map = {
+                    "instr_ios": "ios",
+                    "instr_android": "android",
+                    "instr_windows": "windows",
+                    "instr_macos": "macos"
+                }
+                platform = platform_map.get(data, "ios")
+                await event.answer(text_instruction(platform), alert=True)
+
+            elif data == "support_ask":
+                await event.answer("✍️ Напишите ваш вопрос в чат", alert=True)
+
+            elif data == "support_menu":
+                await send_banner(bot, event, "support", "💬 **Поддержка**\n\nНапишите ваш вопрос.", inline_support(), user_id, my_id)
+
+            elif data == "faq_menu":
+                await event.answer("❓ FAQ: В разработке", alert=True)
+
+            elif data == "instructions_menu":
+                await send_banner(bot, event, "instructions", "📖 **Инструкции**\n\nВыберите устройство:", inline_instructions(), user_id, my_id)
+
             else:
-                await event.answer("❌ Ошибка", alert=True)
+                await event.answer("🤔 В разработке", alert=True)
 
-        elif data == "my_keys":
-            await send_banner(bot, event, "profile", text_keys(user.get("keys", [])), inline_back(), user_id, my_id)
-
-        elif data == "balance":
-            await event.answer(f"💳 Баланс: {user.get('balance', 0)}₽", alert=True)
-
-        elif data == "history":
-            await event.answer("📜 История пуста", alert=True)
-
-        elif data.startswith("instr_"):
-            platform_map = {
-                "instr_ios": "ios",
-                "instr_android": "android",
-                "instr_windows": "windows",
-                "instr_macos": "macos"
-            }
-            platform = platform_map.get(data, "ios")
-            await event.answer(text_instruction(platform), alert=True)
-
-        elif data == "support_ask":
-            await event.answer("✍️ Напишите ваш вопрос в чат", alert=True)
-
-        elif data == "support_menu":
-            await send_banner(bot, event, "support", "💬 **Поддержка**\n\nНапишите ваш вопрос.", inline_support(), user_id, my_id)
-
-        elif data == "faq_menu":
-            await event.answer("❓ FAQ: В разработке", alert=True)
-
-        elif data == "instructions_menu":
-            await send_banner(bot, event, "instructions", "📖 **Инструкции**\n\nВыберите устройство:", inline_instructions(), user_id, my_id)
-
-        else:
-            await event.answer("🤔 В разработке", alert=True)
+        except Exception as e:
+            logger.error(f"❌ Ошибка в callback_handler (клиент): {type(e).__name__} - {e}")
+            try:
+                await event.answer("⚠️ Произошла ошибка", alert=True)
+            except:
+                pass
 
         log_timing(f"Обработка '{data}'", start_time)
