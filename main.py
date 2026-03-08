@@ -54,6 +54,9 @@ from brains.employees import get_todays_birthdays, get_upcoming_birthdays
 # VPN магазин
 from brains.vpn_logic import register_vpn_handlers, preload_banners
 
+# Задачи и проекты
+from skills.task_commands import register_task_commands
+
 # ========== ГЛОБАЛЬНЫЕ СОСТОЯНИЯ ==========
 SHUTDOWN_EVENT = asyncio.Event()
 
@@ -118,7 +121,10 @@ async def main():
     # 1. ПОДКЛЮЧАЕМ ЛОГИКУ МАГАЗИНА
     register_vpn_handlers(bot, MY_ID)
 
-    # 2. ПОДКЛЮЧАЕМ AI-АССИСТЕНТА ДЛЯ ВЛАДЕЛЬЦА
+    # 2. ПОДКЛЮЧАЕМ ЗАДАЧИ И ПРОЕКТЫ
+    register_task_commands(bot, MY_ID)
+
+    # 3. ПОДКЛЮЧАЕМ AI-АССИСТЕНТА ДЛЯ ВЛАДЕЛЬЦА
     @bot.on(events.NewMessage(chats=MY_ID))
     async def owner_chat_handler(event):
         """Обработка сообщений от владельца (AI Карина)"""
