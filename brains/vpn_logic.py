@@ -235,8 +235,18 @@ def register_vpn_handlers(bot: TelegramClient, my_id: int):
         logger.info("=" * 60)
         logger.info(f"📥 /start от {user_id}")
 
+        # Владелец — AI ассистент
         if user_id == my_id:
-            await event.respond("👋 Привет, Михаил! Я Карина, твой AI-ассистент.\n\n💬 Пиши — отвечу!\n⚙️ Команды: /help")
+            await event.respond(
+                "👋 Привет, Михаил! Я Карина, твой AI-ассистент.\n\n"
+                "💬 Пиши — отвечу!\n"
+                "⚙️ Команды: /help, /calendar, /health, /app",
+                buttons=[
+                    [Button.inline(" Календарь", b"ai_calendar"), Button.inline("💉 Здоровье", b"ai_health")],
+                    [Button.inline(" Новости", b"ai_news"), Button.inline("🧠 Память", b"ai_memory")]
+                ]
+            )
+            log_timing("Обработка /start", start_time)
             return
 
         # Клиент — VPN магазин
@@ -260,12 +270,39 @@ def register_vpn_handlers(bot: TelegramClient, my_id: int):
 
         logger.info(f"📥 Кнопка '{data}' от {user_id}")
 
-        # Игнорируем кнопки VPN-магазина от владельца
-        # (у владельца свои AI-кнопки с префиксом ai_)
-        if user_id == my_id and data.startswith("vpn_"):
-            await event.answer("⚙️ Это для клиентов", alert=True)
+        # ============================================
+        # ВЛАДЕЛЕЦ — AI кнопки
+        # ============================================
+        if user_id == my_id:
+            await event.answer()
+            
+            if data == "ai_calendar":
+                from brains.calendar import get_upcoming_events
+                events_info = await get_upcoming_events()
+                await event.edit(f"🗓 **Календарь:**\n\n{events_info}")
+                
+            elif data == "ai_health":
+                from brains.health import get_health_report_text
+                health_report = await get_health_report_text(7)
+                await event.edit(f"💉 **Здоровье:**\n\n{health_report}")
+                
+            elif data == "ai_news":
+                from brains.news import get_latest_news
+                news = await get_latest_news(limit=3, user_id=my_id)
+                await event.edit(f"📰 **Новости:**\n\n{news}")
+                
+            elif data == "ai_memory":
+                await event.edit("🧠 **Память**\n\nИспользуйте команду /memory для управления памятью.")
+                
+            elif data.startswith("vpn_"):
+                await event.answer("⚙️ Это для клиентов", alert=True)
+                
+            log_timing(f"Обработка '{data}'", start_time)
             return
 
+        # ============================================
+        # КЛИЕНТЫ — VPN магазин
+        # ============================================
         if user_id not in VPN_USERS:
             VPN_USERS[user_id] = {
                 "state": "NEW",
