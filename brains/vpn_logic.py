@@ -245,6 +245,9 @@ def register_vpn_handlers(bot: TelegramClient, my_id: int):
 
         user = VPN_USERS[user_id]
 
+        # ⚡ СРАЗУ отвечаем на callback query, чтобы ID не истёк во время загрузки баннера
+        await event.answer()
+
         # Навигация
         if data == "main_menu":
             await send_banner(bot, event, "menu", text_welcome(user_id), inline_main_menu(), user_id, my_id)
