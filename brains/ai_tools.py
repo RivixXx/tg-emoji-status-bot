@@ -69,7 +69,26 @@ class AIToolExecutor:
             
             elif tool_name == "list_my_active_reminders":
                 return await self._get_active_reminders()
-            
+
+            # Задачи и проекты
+            elif tool_name == "create_task":
+                return await self._create_task(args, user_id)
+
+            elif tool_name == "get_my_tasks":
+                return await self._get_tasks(args, user_id)
+
+            elif tool_name == "complete_task":
+                return await self._complete_task(args, user_id)
+
+            elif tool_name == "create_project":
+                return await self._create_project(args, user_id)
+
+            elif tool_name == "get_sprint_info":
+                return await self._get_sprint_info(user_id)
+
+            elif tool_name == "get_productivity_stats":
+                return await self._get_productivity_stats(args, user_id)
+
             else:
                 return f"❌ Неизвестный инструмент: {tool_name}"
                 
@@ -220,18 +239,195 @@ class AIToolExecutor:
     async def _get_active_reminders(self) -> str:
         """Получает активные напоминания"""
         from brains.mcp_tools import mcp_get_active_reminders
-        
+
         reminders = await asyncio.wait_for(mcp_get_active_reminders(), timeout=10.0)
-        
+
         if not reminders:
             return "📋 У тебя сейчас нет активных напоминаний. Отлично! 😊"
-        
+
         lines = []
         for r in reminders:
             time_str = r.get("scheduled_time", "")[:16].replace("T", " ")
             lines.append(f"• {r.get('message', 'Напоминание')} ({time_str})")
-        
+
         return "🔔 Активные напоминания:\n" + "\n".join(lines)
+
+    # ========== ЗАДАЧИ И ПРОЕКТЫ ==========
+
+    async def _create_task(self, args: Dict, user_id: int) -> str:
+        """Создаёт задачу"""
+        from brains.tasks import create_task, TaskPriority
+        from datetime import datetime
+
+        title = args.get("title", "")
+        description = args.get("description", "")
+        due_date_str = args.get("due_date")
+        priority_str = args.get("priority", "medium")
+
+        if not title:
+            return "❌ Не указано название задачи"
+
+        # Парсим дедлайн
+        due_date = None
+        if due_date_str:
+            try:
+                due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
+            except:
+                pass
+
+        # Парсим приоритет
+        priority_map = {
+            "low": TaskPriority.LOW,
+            "medium": TaskPriority.MEDIUM,
+            "high": TaskPriority.HIGH,
+            "urgent": TaskPriority.URGENT
+        }
+        priority = priority_map.get(priority_str, TaskPriority.MEDIUM)
+
+        task = await create_task(
+            user_id=user_id,
+            title=title,
+            description=description,
+            priority=priority,
+            due_date=due_date
+        )
+
+        if task:
+            response = f"✅ **Задача создана!**\n\n"
+            response += f"📝 {task.title}\n"
+            if task.due_date:
+                response += f"📅 Дедлайн: {task.due_date.strftime('%d.%m.%Y %H:%M')}\n"
+            response += f"🔴 Приоритет: {task.priority.value}"
+            return response
+        
+        return "❌ Не удалось создать задачу"
+
+    async def _get_tasks(self, args: Dict, user_id: int) -> str:
+        """Получает задачи"""
+        from brains.tasks import get_user_tasks, TaskStatus, format_task_for_display
+
+        status_str = args.get("status", "todo")
+        limit = args.get("limit", 10)
+
+        status_map = {
+            "todo": TaskStatus.TODO,
+            "in_progress": TaskStatus.IN_PROGRESS,
+            "done": TaskStatus.DONE,
+            "all": None
+        }
+        status = status_map.get(status_str, TaskStatus.TODO)
+
+        tasks = await get_user_tasks(
+            user_id=user_id,
+            status=status,
+            limit=limit,
+            include_completed=(status_str == "all")
+        )
+
+        if not tasks:
+            return f"📋 Задач не найдено (статус: {status_str})"
+
+        response = f"📋 **Задачи** ({len(tasks)}):\n\n"
+        for task in tasks[:limit]:
+            response += f"• {task.title}\n"
+            if task.due_date:
+                if task.is_overdue():
+                    response += f"  🔴 Просрочено\n"
+                else:
+                    response += f"  📅 {task.due_date.strftime('%d.%m')}\n"
+
+        return response
+
+    async def _complete_task(self, args: Dict, user_id: int) -> str:
+        """Завершает задачу"""
+        from brains.tasks import complete_task
+
+        task_id = args.get("task_id")
+        if not task_id:
+            return "❌ Не указан ID задачи"
+
+        task = await complete_task(task_id, user_id)
+
+        if task:
+            return f"✅ **Задача завершена!**\n\n{task.title}"
+        return "❌ Не удалось завершить задачу (проверь ID)"
+
+    async def _create_project(self, args: Dict, user_id: int) -> str:
+        """Создаёт проект"""
+        from brains.projects import create_project, ProjectPriority
+        from datetime import datetime
+
+        name = args.get("name", "")
+        description = args.get("description", "")
+        deadline_str = args.get("deadline")
+
+        if not name:
+            return "❌ Не указано название проекта"
+
+        # Парсим дедлайн
+        deadline = None
+        if deadline_str:
+            try:
+                deadline = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
+            except:
+                pass
+
+        project = await create_project(
+            user_id=user_id,
+            name=name,
+            description=description,
+            deadline=deadline
+        )
+
+        if project:
+            response = f"✅ **Проект создан!**\n\n"
+            response += f"📁 {project.name}\n"
+            if project.description:
+                response += f"📝 {project.description[:100]}\n"
+            if project.deadline:
+                response += f"📅 Дедлайн: {project.deadline.strftime('%d.%m.%Y')}"
+            return response
+        
+        return "❌ Не удалось создать проект"
+
+    async def _get_sprint_info(self, user_id: int) -> str:
+        """Получает информацию о спринте"""
+        from brains.sprints import get_active_sprint, get_sprint_stats, format_sprint_for_display
+
+        sprint = await get_active_sprint(user_id)
+
+        if not sprint:
+            return "🏃 У тебя нет активного спринта"
+
+        stats = await get_sprint_stats(sprint.id)
+        days_left = sprint.days_remaining()
+
+        response = f"🏃 **Активный спринт:**\n\n"
+        response += f"📛 {sprint.name}\n"
+        response += f"📅 {sprint.start_date} — {sprint.end_date}\n"
+        response += f"⏳ Осталось дней: {days_left}\n"
+        response += f"📊 Прогресс: {stats.get('completion_percent', 0)}%\n"
+        
+        if sprint.goal:
+            response += f"\n🎯 Цель: {sprint.goal}"
+
+        return response
+
+    async def _get_productivity_stats(self, args: Dict, user_id: int) -> str:
+        """Получает статистику продуктивности"""
+        from brains.tasks import get_productivity_stats
+
+        days = args.get("days", 7)
+        stats = await get_productivity_stats(user_id, days)
+
+        response = f"📊 **Продуктивность** ({days} дн.):\n\n"
+        response += f"📋 Задач: {stats.get('total_tasks', 0)}\n"
+        response += f"✅ Выполнено: {stats.get('completed_tasks', 0)}\n"
+        response += f"🔄 В работе: {stats.get('in_progress_tasks', 0)}\n"
+        response += f"🔴 Просрочено: {stats.get('overdue_tasks', 0)}\n"
+        response += f"\n📈 Процент выполнения: {stats.get('completion_rate', 0)}%"
+
+        return response
 
 
 # Глобальный экземпляр

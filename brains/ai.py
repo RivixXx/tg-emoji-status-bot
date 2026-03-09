@@ -166,10 +166,13 @@ SYSTEM_PROMPT = """
 </memory_and_rag>
 
 <tool_usage>
-Используй доступные инструменты (functions) для выполнения задач. 
+Используй доступные инструменты (functions) для выполнения задач.
 - КАЛЕНДАРЬ: Для планирования, проверки планов или поиска конфликтов расписания.
 - ЗДОРОВЬЕ: Для проверки статистики.
 - ИНФОРМАЦИЯ: Погода, дни рождения сотрудников.
+- ЗАДАЧИ: Для создания, просмотра, завершения задач и проектов.
+- СПРИНТЫ: Для проверки прогресса спринта.
+- ПРОДУКТИВНОСТЬ: Для получения статистики выполнения задач.
 </tool_usage>
 
 <context>
@@ -323,6 +326,91 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_task",
+            "description": "Создаёт новую задачу. Используй, когда пользователь просит создать задачу, напоминание, дело. Можно с дедлайном и приоритетом.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Название задачи"},
+                    "description": {"type": "string", "description": "Описание задачи (опционально)"},
+                    "due_date": {"type": "string", "description": "Дедлайн в формате ISO (YYYY-MM-DDTHH:MM:SS)"},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"], "description": "Приоритет"}
+                },
+                "required": ["title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_my_tasks",
+            "description": "Получает список задач пользователя. Используй, когда спрашивают 'какие у меня задачи', 'что нужно сделать'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["todo", "in_progress", "done", "all"], "description": "Фильтр по статусу"},
+                    "limit": {"type": "integer", "description": "Максимальное количество задач", "default": 10}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "complete_task",
+            "description": "Завершает задачу. Используй, когда пользователь говорит 'задача выполнена', 'сделал задачу'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID задачи для завершения"}
+                },
+                "required": ["task_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_project",
+            "description": "Создаёт новый проект. Используй, когда пользователь хочет создать проект с несколькими задачами.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Название проекта"},
+                    "description": {"type": "string", "description": "Описание проекта"},
+                    "deadline": {"type": "string", "description": "Дедлайн проекта в формате ISO"}
+                },
+                "required": ["name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_sprint_info",
+            "description": "Получает информацию о текущем спринте. Используй, когда спрашивают про спринт, прогресс.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_productivity_stats",
+            "description": "Получает статистику продуктивности. Используй, когда спрашивают про прогресс, эффективность, выполнение задач.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "description": "Период в днях", "default": 7}
+                }
             }
         }
     }
